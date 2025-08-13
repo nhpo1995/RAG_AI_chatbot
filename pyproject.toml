@@ -1,0 +1,13 @@
+[project]
+name = "haystack-data-convertor"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "farm-haystack>=1.26.4.post0",
+    "haystack-ai>=2.16.1",
+    "qdrant-client>=1.15.1",
+    "unstructured>=0.18.11",
+    "unstructured-fileconverter-haystack>=0.5.0",
+]
