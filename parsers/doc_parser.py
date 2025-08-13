@@ -1,5 +1,3 @@
-# parsers/doc_parser.py
-
 import base64
 import uuid
 from pathlib import Path

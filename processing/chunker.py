@@ -1,7 +1,6 @@
 from haystack import Document
 from haystack.components.preprocessors import DocumentSplitter
 from typing import List, Optional, Literal
-
 from nltk.corpus import reuters
 
 
