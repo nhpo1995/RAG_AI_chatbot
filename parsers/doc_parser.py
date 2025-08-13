@@ -59,7 +59,7 @@ class DocParser:
         tbody = table.find("tbody")
         target_rows = tbody.find_all("tr") if tbody else table.find_all("tr")
         for tr in target_rows:
-            cells = [td.get_text(strip=True) for td in tr.find_all(["td", "th"])]
+            cells = [td.get_text(strip=True) for td in tr.find_all(["td"])]
             rows.append(cells)
 
         md_lines = []
@@ -72,13 +72,7 @@ class DocParser:
             md_lines.append("| " + " | ".join(r) + " |")
         return "\n".join(md_lines).strip()
 
-    def process_table_block(
-            self,
-            blocks,
-            idx,
-            file_path: Path,
-            is_in_image=False,
-            file_document_id=None,
+    def process_table_block(self, blocks, idx, file_path: Path, is_in_image=False, file_document_id=None,
     ) -> Document:
         d = blocks[idx]
         if "text_as_html" in d.meta:
@@ -117,7 +111,6 @@ class DocParser:
     def parse_file(self, file_path: Path) -> Tuple[List[Document], Dict[str, int]]:
         """Parse một file, trả về (list Documents, stats)."""
         file_document_id = str(uuid.uuid4())
-
         converter = UnstructuredFileConverter(
             api_url=self.api_url,
             document_creation_mode="one-doc-per-element",
@@ -125,28 +118,26 @@ class DocParser:
             progress_bar=False,
             unstructured_kwargs=self.unstructured_kwargs
         )
-
         result = converter.run(paths=[file_path])
         blocks = result["documents"]
-
-        # 1) Text
-        all_text_parts = [
-            d.content.strip()
-            for d in blocks
-            if self.is_text_block(d) and d.content
-        ]
-        merged_text_content = "\n\n".join(all_text_parts).strip()
-        text_doc = Document(
-            content=merged_text_content,
-            meta={
-                "category": "text",
-                "source": str(file_path),
-                "filename": file_path.name,
-                "document_id": file_document_id,
-            }
-        )
-
-        # 2) Image
+        # 1) Text: tạo 1 Document cho mỗi block text
+        text_docs = []
+        for idx, d in enumerate(blocks):
+            if self.is_text_block(d) and d.content:
+                text_docs.append(
+                    Document(
+                        content=d.content.strip(),
+                        meta={
+                            "category": "text",
+                            "source": str(file_path),
+                            "filename": file_path.name,
+                            "document_id": file_document_id,
+                            "page_number": d.meta.get("page_number"),
+                            "element_index": d.meta.get("element_index"),
+                        }
+                    )
+                )
+        # 2) Image: Moi image la 1 document
         image_docs = []
         for idx, d in enumerate(blocks):
             if d.meta.get("category") == "Image" and "image_base64" in d.meta:
@@ -182,7 +173,7 @@ class DocParser:
                     )
                 )
 
-        # 3) Table
+        # 3) Table: moi table 1 document rieng
         table_docs = []
         for idx, d in enumerate(blocks):
             if d.meta.get("category") == "Table":
@@ -191,10 +182,8 @@ class DocParser:
                 )
             elif d.meta.get("category") == "Image" and "text_as_html" in d.meta:
                 table_docs.append(
-                    self.process_table_block(blocks, idx, file_path, file_document_id=file_document_id,
-                                             is_in_image=True)
+                    self.process_table_block(blocks, idx, file_path, file_document_id=file_document_id, is_in_image=True)
                 )
-
         # Merge
         final_docs = []
         if merged_text_content and file_path.suffix.lower() not in [".xls", ".xlsx"]:
