@@ -1,3 +1,5 @@
+# parsers/doc_parser.py
+
 import base64
 import uuid
 from pathlib import Path
@@ -5,39 +7,48 @@ from typing import List, Dict, Optional, Set, Any, Tuple
 from bs4 import BeautifulSoup
 from haystack import Document
 from haystack_integrations.components.converters.unstructured import UnstructuredFileConverter
+from config import API_URL_UNSTRUCTURED
 
 class DocParser:
     """
-        Bộ parser trích xuất text, image, table từ file (PDF, DOCX, XLSX, ...).
+    Bộ parser trích xuất text, image, table từ file (PDF, DOCX, XLSX, ...).
     Tự động lưu ảnh ra local và tạo document_id riêng cho mỗi file.
     """
     def __init__(
-        self,
-        api_url: str = "http://localhost:8000/general/v0/general",
-        images_root: Path = Path("images"),
-        text_categories: Set[str] = None,
-        unstructured_kwargs: Optional[Dict[str, Any]] = None,
+            self,
+            api_url: str = API_URL_UNSTRUCTURED,
+            images_root: Path = Path("images"),
+            text_categories: Set[str] = None,
+            unstructured_kwargs: Optional[Dict[str, Any]] = None,
     ):
         self.api_url = api_url
         self.images_root = images_root
         self.images_root.mkdir(exist_ok=True)
         self.text_categories = text_categories or {"Title", "NarrativeText"}
-        self.unstructured_kwargs = unstructured_kwargs or {
+        default_unstructured_kwargs = {
             "encoding": "utf-8",
             "extract_image_block_types": ["Image", "Table"],
             "languages": ["vie", "eng"],
             "skip_infer_table_types": [],
             "strategy": "hi_res",
         }
-        self.stats: Optional[Dict[str, int]] = None
+        if unstructured_kwargs:
+            default_unstructured_kwargs.update(unstructured_kwargs)
+        self.unstructured_kwargs = default_unstructured_kwargs
+        self.converter = UnstructuredFileConverter(
+            api_url=self.api_url,
+            document_creation_mode="one-doc-per-element",
+            separator="\n\n",
+            progress_bar=False,
+            unstructured_kwargs=self.unstructured_kwargs
+        )
         self.file_stats: Dict[str, Dict[str, int]] = {}
 
     # ---------------- commons ----------------
     def is_text_block(self, doc: Document) -> bool:
         return doc.meta.get("category") in self.text_categories
 
-
-    def nearest_text(self, blocks, idx,  direction: int) -> Optional[str]:
+    def nearest_text(self, blocks: List[Document], idx: int, direction: int) -> str:
         j = idx + direction
         while 0 <= j < len(blocks):
             if self.is_text_block(blocks[j]):
@@ -49,9 +60,8 @@ class DocParser:
     def html_table_to_markdown(html: str) -> str:
         soup = BeautifulSoup(html, "html.parser")
         table = soup.find("table")
-        if table is None:
+        if not table:
             return soup.get_text(separator=" ").strip()
-
         headers, rows = [], []
         thead = table.find("thead")
         if thead:
@@ -61,29 +71,26 @@ class DocParser:
         for tr in target_rows:
             cells = [td.get_text(strip=True) for td in tr.find_all(["td"])]
             rows.append(cells)
-
+        rows = [r for r in rows if any(cell for cell in r)]
+        if not headers and rows:  # Nếu không có thead, lấy hàng đầu tiên làm header
+            headers = rows.pop(0)
         md_lines = []
         if headers:
             md_lines.append("| " + " | ".join(headers) + " |")
             md_lines.append("| " + " | ".join(["---"] * len(headers)) + " |")
         for r in rows:
-            if headers and len(r) < len(headers):
-                r += [""] * (len(headers) - len(r))
+            # Đảm bảo số cột khớp với header
+            r.extend([""] * (len(headers) - len(r)))
             md_lines.append("| " + " | ".join(r) + " |")
         return "\n".join(md_lines).strip()
 
-    def process_table_block(self, blocks, idx, file_path: Path, is_in_image=False, file_document_id=None,
-    ) -> Document:
+    def process_table_block(self, blocks: List[Document], idx: int, file_path: Path, file_document_id: str,
+        is_in_image: bool = False) -> Document:
         d = blocks[idx]
-        if "text_as_html" in d.meta:
-            md = self.html_table_to_markdown(d.meta["text_as_html"])
-        else:
-            md = (d.content or "").strip()
-
+        md = self.html_table_to_markdown(d.meta.get("text_as_html", d.content or ""))
         prev_txt = self.nearest_text(blocks, idx, -1)
         if prev_txt:
-            md = prev_txt + "\n\n" + md  # giữ xuống dòng
-
+            md = f"{prev_txt}\n\n{md}"
         return Document(
             content=md,
             meta={
@@ -93,14 +100,15 @@ class DocParser:
                 "document_id": file_document_id,
                 "page_number": d.meta.get("page_number"),
                 "element_index": d.meta.get("element_index"),
-                "from_image": is_in_image
+                "from_image": is_in_image,
             },
         )
 
-    def save_image(self, image_base64: str, out_path: Path) -> bool:
-        """Giải mã và lưu ảnh ra file. Trả True nếu thành công."""
+    @staticmethod
+    def save_image(image_base64: str, out_path: Path) -> bool:
         try:
             img_bytes = base64.b64decode(image_base64)
+            out_path.parent.mkdir(parents=True, exist_ok=True)
             with open(out_path, "wb") as f:
                 f.write(img_bytes)
             return True
@@ -109,23 +117,17 @@ class DocParser:
 
     # ---------------- Core ----------------
     def parse_file(self, file_path: Path) -> Tuple[List[Document], Dict[str, int]]:
-        """Parse một file, trả về (list Documents, stats)."""
         file_document_id = str(uuid.uuid4())
-        converter = UnstructuredFileConverter(
-            api_url=self.api_url,
-            document_creation_mode="one-doc-per-element",
-            separator="\n\n",
-            progress_bar=False,
-            unstructured_kwargs=self.unstructured_kwargs
-        )
-        result = converter.run(paths=[file_path])
+        result = self.converter.run(paths=[file_path])
         blocks = result["documents"]
-        # 1) Text: tạo 1 Document cho mỗi block text
-        text_docs = []
+        final_docs: List[Document] = []
         for idx, d in enumerate(blocks):
+            category = d.meta.get("category")
+            # 1) Xử lý Text
             if self.is_text_block(d) and d.content:
-                text_docs.append(
-                    Document(
+                # Logic bỏ qua text từ file Excel
+                if file_path.suffix.lower() not in [".xls", ".xlsx"]:
+                    final_docs.append(Document(
                         content=d.content.strip(),
                         meta={
                             "category": "text",
@@ -135,81 +137,60 @@ class DocParser:
                             "page_number": d.meta.get("page_number"),
                             "element_index": d.meta.get("element_index"),
                         }
-                    )
-                )
-        # 2) Image: Moi image la 1 document
-        image_docs = []
-        for idx, d in enumerate(blocks):
-            if d.meta.get("category") == "Image" and "image_base64" in d.meta:
+                    ))
+            # 2) Xử lý Image
+            elif category == "Image" and "image_base64" in d.meta:
                 images_dir = self.images_root / file_path.stem
-                images_dir.mkdir(exist_ok=True)
-
-                mime = d.meta.get("image_mime_type") or "image/png"
+                mime = d.meta.get("image_mime_type", "image/png")
                 ext = ".jpg" if "jpeg" in mime or "jpg" in mime else ".png"
                 page = d.meta.get("page_number", "x")
-                elidx = d.meta.get("element_index", idx)
-                img_path = images_dir / f"page_{page}_idx_{elidx}{ext}"
-
-                saved = self.save_image(d.meta["image_base64"], img_path)
-                if not saved:
-                    img_path = Path("")
-
-                prev_txt = self.nearest_text(blocks, idx, -1)
-                next_txt = self.nearest_text(blocks, idx, +1)
-                context = (prev_txt + ("\n\n" if prev_txt and next_txt else "") + next_txt).strip()
-
-                image_docs.append(
-                    Document(
-                        content=f"Hình ảnh: {context}" if context else "Hình ảnh:",
+                img_path = images_dir / f"page_{page}_idx_{idx}{ext}"
+                if self.save_image(d.meta["image_base64"], img_path):
+                    prev_txt = self.nearest_text(blocks, idx, -1)
+                    next_txt = self.nearest_text(blocks, idx, 1)
+                    context = (f"{prev_txt}\n\n{next_txt}" if prev_txt and next_txt else prev_txt or next_txt).strip()
+                    final_docs.append(Document(
+                        content=f"Hình ảnh: {context}" if context else "Hình ảnh.",
                         meta={
                             "category": "image",
-                            "file_path": str(img_path) if img_path else "",
+                            "file_path": str(img_path),
                             "source": str(file_path),
                             "filename": file_path.name,
                             "document_id": file_document_id,
                             "page_number": d.meta.get("page_number"),
                             "element_index": d.meta.get("element_index"),
                         },
+                    ))
+                # Xử lý trường hợp table nằm bên trong ảnh
+                if "text_as_html" in d.meta:
+                    final_docs.append(
+                        self.process_table_block(blocks, idx, file_path, file_document_id, is_in_image=True)
                     )
+            # 3) Xử lý Table
+            elif category == "Table":
+                final_docs.append(
+                    self.process_table_block(blocks, idx, file_path, file_document_id)
                 )
-
-        # 3) Table: moi table 1 document rieng
-        table_docs = []
-        for idx, d in enumerate(blocks):
-            if d.meta.get("category") == "Table":
-                table_docs.append(
-                    self.process_table_block(blocks, idx, file_path, file_document_id=file_document_id)
-                )
-            elif d.meta.get("category") == "Image" and "text_as_html" in d.meta:
-                table_docs.append(
-                    self.process_table_block(blocks, idx, file_path, file_document_id=file_document_id, is_in_image=True)
-                )
-        # Merge
-        final_docs = []
-        if merged_text_content and file_path.suffix.lower() not in [".xls", ".xlsx"]:
-            final_docs.append(text_doc)
-        final_docs.extend(image_docs)
-        final_docs.extend(table_docs)
-
         # Thống kê
         stats = {
             "text": sum(1 for d in final_docs if d.meta.get("category") == "text"),
             "image": sum(1 for d in final_docs if d.meta.get("category") == "image"),
             "table": sum(1 for d in final_docs if d.meta.get("category") == "table"),
         }
-        self.stats = stats
-
         return final_docs, stats
 
     def parse_folder(self, folder_path: Path) -> List[Document]:
-        """Parse toàn bộ file trong folder."""
         all_docs = []
         self.file_stats = {}
-        for file_path in folder_path.iterdir():
-            if file_path.is_file():
+        # Lọc chỉ lấy file, bỏ qua thư mục con hoặc file ẩn như .DS_Store
+        files = [f for f in folder_path.iterdir() if f.is_file() and not f.name.startswith('.')]
+
+        for file_path in files:
+            try:
+                # print(f"Parsing file: {file_path.name}") # Bỏ comment để debug
                 docs, stats = self.parse_file(file_path)
                 self.file_stats[file_path.name] = stats
                 all_docs.extend(docs)
+            except Exception as e:
+                print(f"Lỗi khi xử lý file {file_path.name}: {e}")
         return all_docs
-
-

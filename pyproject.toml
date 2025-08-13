@@ -3,11 +3,18 @@ name = "haystack-data-convertor"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11, <3.12"
 dependencies = [
-    "farm-haystack>=1.26.4.post0",
+    "colorlog>=6.9.0",
     "haystack-ai>=2.16.1",
+    "lxml>=6.0.0",
+    "pydantic>=1.10.22",
+    "pypdf>=6.0.0",
+    "pytest>=8.4.1",
     "qdrant-client>=1.15.1",
+    "qdrant-haystack>=9.2.0",
+    "ruff>=0.12.8",
+    "sentence-transformers>=5.1.0",
     "unstructured>=0.18.11",
     "unstructured-fileconverter-haystack>=0.5.0",
 ]

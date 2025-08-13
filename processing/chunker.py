@@ -6,21 +6,18 @@ from nltk.corpus import reuters
 
 
 class DocumentChunkerWrapper:
-    def __init__(
-        self,
-        chunker: Optional[DocumentSplitter] = None
-    ):
-       if chunker is None:
-           self.chunker = DocumentSplitter(
-               split_by="word",
-               split_length=350,
-               split_overlap=45,
-               split_threshold=0,
-               respect_sentence_boundary=True,
-               skip_empty_documents=True,
-           )
-       else:
-           self.chunker = chunker
+    def __init__(self, chunker: Optional[DocumentSplitter] = None):
+        if chunker is None:
+            self.chunker = DocumentSplitter(
+                split_by="word",
+                split_length=350,
+                split_overlap=45,
+                split_threshold=0,
+                respect_sentence_boundary=True,
+                skip_empty_documents=True,
+            )
+        else:
+            self.chunker = chunker
 
     def chunk_table(self, doc: Document) -> List[Document]:
         """
