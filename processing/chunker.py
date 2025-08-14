@@ -1,7 +1,8 @@
+# chunker.py (ĐÃ SỬA)
+
+from typing import List, Optional, Dict, Any
 from haystack import Document
 from haystack.components.preprocessors import DocumentSplitter
-from typing import List, Optional, Literal
-from nltk.corpus import reuters
 
 
 class DocumentChunkerWrapper:
@@ -11,16 +12,16 @@ class DocumentChunkerWrapper:
                 split_by="word",
                 split_length=350,
                 split_overlap=45,
-                split_threshold=0,
                 respect_sentence_boundary=True,
-                skip_empty_documents=True,
             )
+            self.chunker.warm_up()
         else:
             self.chunker = chunker
+            self.chunker.warm_up()
 
     def chunk_table(self, doc: Document) -> List[Document]:
         """
-        Chunk bảng theo header + nhóm row (ví dụ: 20 hàng một chunk)
+        Chunk bảng theo header + nhóm row (ví dụ: 15 hàng một chunk)
         """
         lines = doc.content.strip().split("\n")
         if not lines:
@@ -28,8 +29,7 @@ class DocumentChunkerWrapper:
 
         header = lines[0]
         rows = lines[1:]
-
-        chunk_size = 15  # số hàng mỗi chunk
+        chunk_size = 15
         table_chunks = []
 
         for i in range(0, len(rows), chunk_size):
@@ -38,33 +38,29 @@ class DocumentChunkerWrapper:
             table_chunks.append(
                 Document(content=chunk_content, meta=doc.meta.copy())
             )
-
         return table_chunks
 
-    def run(self, documents: List[Document] = None) -> List[Document]:
+    def run(self, documents: List[Document]) -> List[Document]:
         """
-            Đối với text: Split bình thường,
-            Đối với image: bỏ qua
-            Đối với table:
-             - Tách table theo cụm row + header
-        :param documents:
-        :return:
+        Đối với text: Split bình thường
+        Đối với table: Tách table theo cụm row + header
+        Đối với image và loại khác: Giữ nguyên
         """
         final_chunks = []
+        text_docs_to_split = []
+
         for doc in documents:
             category = doc.meta.get("category")
             if category == "text":
-                # Chunk text bình thường
-                result = self.text_splitter.run(documents=[doc])
-                final_chunks.extend(result["documents"])
+                text_docs_to_split.append(doc)
             elif category == "table":
-                # Chunk bảng
                 final_chunks.extend(self.chunk_table(doc))
-            elif category == "image":
-                # Giữ nguyên ảnh
+            else:  # Image và các loại khác
                 final_chunks.append(doc)
-            else:
-                # Loại khác → giữ nguyên
-                final_chunks.append(doc)
-        return final_chunks
 
+        # Chunk tất cả các text doc cùng lúc để tối ưu
+        if text_docs_to_split:
+            result = self.chunker.run(documents=text_docs_to_split)
+            final_chunks.extend(result["documents"])
+
+        return final_chunks

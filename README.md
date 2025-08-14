@@ -1,0 +1,1 @@
+Qdrant_ui_check: http://localhost:6333/dashboard#/collections/Document#points

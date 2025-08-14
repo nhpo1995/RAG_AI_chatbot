@@ -1,36 +1,36 @@
 # storage/vector_store.py
-
 from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
 from qdrant_client import models
 import config
+from qdrant_client import QdrantClient
 
 
-def get_document_store() -> QdrantDocumentStore:
+def get_document_store(recreate_index=False) -> QdrantDocumentStore:
     """
     Khởi tạo và trả về một QdrantDocumentStore đã được tối ưu cho hiệu năng và bộ nhớ.
     """
-    # 1. Tạo object cấu hình HNSW từ qdrant_client
-    hnsw_config_object = models.HnswConfigDiff(m=16, ef_construct=100)
-
-    # 2. Tạo object cấu hình lượng tử hóa từ qdrant_client
     quantization_config_object = models.ScalarQuantization(
-        type=models.ScalarType.INT8, always_ram=True
+        scalar=models.ScalarQuantizationConfig(
+            type=models.ScalarType.INT8,
+            quantile=1.0,
+            always_ram=True
+        )
     )
 
     document_store = QdrantDocumentStore(
         url=config.VECTOR_DB_URL,
         index=config.VECTOR_DB_COLLECTION,
-        embedding_dim=384,
+        embedding_dim=1536,
         similarity="cosine",
-        recreate_index=False,
-        hnsw_config=hnsw_config_object.dict(),
+        recreate_index=recreate_index,
+        hnsw_config={"m": 16, "ef_construct": 64},
         quantization_config=quantization_config_object.dict(),
         on_disk_payload=True,
         write_batch_size=128,
         payload_fields_to_index=[
-            {"key": "permission", "type": "keyword"},
-            {"key": "source", "type": "keyword"},
-            {"key": "filename", "type": "keyword"},
+            {"field_name": "document_id", "field_schema": {"type": "keyword"}},
+            {"field_name": "category", "field_schema": {"type": "keyword"}},
+            {"field_name": "source", "field_schema": {"type": "keyword"}},
         ],
     )
     return document_store

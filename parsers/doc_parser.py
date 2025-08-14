@@ -1,11 +1,13 @@
 import base64
 import uuid
+from collections import defaultdict
 from pathlib import Path
 from typing import List, Dict, Optional, Set, Any, Tuple
 from bs4 import BeautifulSoup
 from haystack import Document
 from haystack_integrations.components.converters.unstructured import UnstructuredFileConverter
 from config import API_URL_UNSTRUCTURED
+
 
 class DocParser:
     """
@@ -46,6 +48,7 @@ class DocParser:
     def is_text_block(self, doc: Document) -> bool:
         return doc.meta.get("category") in self.text_categories
 
+
     def nearest_text(self, blocks: List[Document], idx: int, direction: int) -> str:
         j = idx + direction
         while 0 <= j < len(blocks):
@@ -53,6 +56,7 @@ class DocParser:
                 return (blocks[j].content or "").strip()
             j += direction
         return ""
+
 
     @staticmethod
     def html_table_to_markdown(html: str) -> str:
@@ -82,13 +86,24 @@ class DocParser:
             md_lines.append("| " + " | ".join(r) + " |")
         return "\n".join(md_lines).strip()
 
+
     def process_table_block(self, blocks: List[Document], idx: int, file_path: Path, file_document_id: str,
         is_in_image: bool = False) -> Document:
         d = blocks[idx]
-        md = self.html_table_to_markdown(d.meta.get("text_as_html", d.content or ""))
+        if "text_as_html" in d.meta:
+            md = self.html_table_to_markdown(d.meta["text_as_html"])
+        else:
+            md = (d.content or "").strip()
         prev_txt = self.nearest_text(blocks, idx, -1)
         if prev_txt:
             md = f"{prev_txt}\n\n{md}"
+        sheet_name = d.meta.get("sheet_name")
+        index = d.meta.get("element_index")
+        page_num = d.meta.get("page_number")
+        if sheet_name:
+            trace = f"Table in sheet {sheet_name} with index {index}"
+        else:
+            trace = f"Table in page {page_num} with index {index}"
         return Document(
             content=md,
             meta={
@@ -96,11 +111,11 @@ class DocParser:
                 "source": str(file_path),
                 "filename": file_path.name,
                 "document_id": file_document_id,
-                "page_number": d.meta.get("page_number"),
-                "element_index": d.meta.get("element_index"),
+                "trace": trace,
                 "from_image": is_in_image,
             },
         )
+
 
     @staticmethod
     def save_image(image_base64: str, out_path: Path) -> bool:
@@ -113,79 +128,114 @@ class DocParser:
         except Exception:
             return False
 
+
     # ---------------- Core ----------------
     def parse_file(self, file_path: Path) -> Tuple[List[Document], Dict[str, int]]:
         file_document_id = str(uuid.uuid4())
         result = self.converter.run(paths=[file_path])
         blocks = result["documents"]
-        final_docs: List[Document] = []
-        for idx, d in enumerate(blocks):
-            category = d.meta.get("category")
-            # 1) Xử lý Text
+        # 1) Xử lý Text với 'trace'
+        text_docs = []
+        # Tách riêng text có page_number và text không có page_number (như file Word)
+        paged_texts = defaultdict(list)
+        unpaged_texts = []
+
+        for d in blocks:
             if self.is_text_block(d) and d.content:
-                # Logic bỏ qua text từ file Excel
-                if file_path.suffix.lower() not in [".xls", ".xlsx"]:
-                    final_docs.append(Document(
-                        content=d.content.strip(),
-                        meta={
-                            "category": "text",
-                            "source": str(file_path),
-                            "filename": file_path.name,
-                            "document_id": file_document_id,
-                            "page_number": d.meta.get("page_number"),
-                            "element_index": d.meta.get("element_index"),
-                        }
-                    ))
-            # 2) Xử lý Image
-            elif category == "Image" and "image_base64" in d.meta:
+                page_number = d.meta.get("page_number")
+                if page_number is not None:
+                    paged_texts[page_number].append(d.content.strip())
+                else:
+                    unpaged_texts.append(d.content.strip())
+
+        # Tạo doc cho text có phân trang (PDF)
+        for page_number, page_texts in paged_texts.items():
+            merged_page_content = "\n\n".join(page_texts).strip()
+            if merged_page_content:
+                text_docs.append(Document(
+                    content=merged_page_content,
+                    meta={
+                        "category": "text",
+                        "source": str(file_path),
+                        "filename": file_path.name,
+                        "document_id": file_document_id,
+                        "trace": f"Trang {page_number}",  # <-- Thay thế page_number bằng trace
+                    }
+                ))
+        # Tạo một doc duy nhất cho text không phân trang (Word, TXT...)
+        if unpaged_texts:
+            merged_unpaged_content = "\n\n".join(unpaged_texts).strip()
+            if merged_unpaged_content:
+                text_docs.append(Document(
+                    content=merged_unpaged_content,
+                    meta={
+                        "category": "text",
+                        "source": str(file_path),
+                        "filename": file_path.name,
+                        "document_id": file_document_id,
+                        "trace": "Nội dung văn bản",  # <-- Trace chung cho file không có trang
+                    }
+                ))
+        # 2) Xử lý Image
+        image_docs = []
+        for idx, d in enumerate(blocks):
+            if d.meta.get("category") == "Image" and "image_base64" in d.meta:
                 images_dir = self.images_root / file_path.stem
                 mime = d.meta.get("image_mime_type", "image/png")
                 ext = ".jpg" if "jpeg" in mime or "jpg" in mime else ".png"
                 page = d.meta.get("page_number", "x")
+                trace = f"Trang {page}, Hình ảnh #{idx}" if page else f"Hình ảnh #{idx}"
                 img_path = images_dir / f"page_{page}_idx_{idx}{ext}"
                 if self.save_image(d.meta["image_base64"], img_path):
                     prev_txt = self.nearest_text(blocks, idx, -1)
                     next_txt = self.nearest_text(blocks, idx, 1)
                     context = (f"{prev_txt}\n\n{next_txt}" if prev_txt and next_txt else prev_txt or next_txt).strip()
-                    final_docs.append(Document(
-                        content=f"Hình ảnh: {context}" if context else "Hình ảnh.",
-                        meta={
-                            "category": "image",
-                            "file_path": str(img_path),
-                            "source": str(file_path),
-                            "filename": file_path.name,
-                            "document_id": file_document_id,
-                            "page_number": d.meta.get("page_number"),
-                            "element_index": d.meta.get("element_index"),
-                        },
-                    ))
-                # Xử lý trường hợp table nằm bên trong ảnh
-                if "text_as_html" in d.meta:
-                    final_docs.append(
-                        self.process_table_block(blocks, idx, file_path, file_document_id, is_in_image=True)
+
+                    image_docs.append(
+                        Document(
+                            content=f"Hình ảnh: {context}" if context else "Hình ảnh:",
+                            meta={
+                                "category": "image",
+                                "file_path": str(img_path),
+                                "source": str(file_path),
+                                "filename": file_path.name,
+                                "document_id": file_document_id,
+                                "trace": trace
+                            },
+                        )
                     )
-            # 3) Xử lý Table
-            elif category == "Table":
-                final_docs.append(
-                    self.process_table_block(blocks, idx, file_path, file_document_id)
-                )
-        # Thống kê
+        # 3) Xử lý Table
+        table_docs = []
+        for idx, d in enumerate(blocks):
+            category = d.meta.get("category")
+            if category == "Table":
+                table_doc = self.process_table_block(blocks, idx, file_path, file_document_id)
+                table_docs.append(table_doc)
+            elif category == "Image" and "text_as_html" in d.meta:
+                table_doc = self.process_table_block(blocks, idx, file_path, file_document_id, is_in_image=True)
+                table_docs.append(table_doc)
+        # 4) Gộp tất cả kết quả và thống kê
+        final_docs = []
+        final_docs.extend(text_docs)
+        final_docs.extend(image_docs)
+        final_docs.extend(table_docs)
         stats = {
-            "text": sum(1 for d in final_docs if d.meta.get("category") == "text"),
-            "image": sum(1 for d in final_docs if d.meta.get("category") == "image"),
-            "table": sum(1 for d in final_docs if d.meta.get("category") == "table"),
+            "text": len(text_docs),
+            "image": len(image_docs),
+            "table": len(table_docs),
         }
         return final_docs, stats
 
-    def parse_folder(self, folder_path: Path) -> List[Document]:
+
+    def run(self, folder_path: Path) -> List[Document]:
         all_docs = []
         self.file_stats = {}
         # Lọc chỉ lấy file, bỏ qua thư mục con hoặc file ẩn như .DS_Store
         files = [f for f in folder_path.iterdir() if f.is_file() and not f.name.startswith('.')]
-
+        files.sort()
         for file_path in files:
             try:
-                # print(f"Parsing file: {file_path.name}") # Bỏ comment để debug
+                print(f"Parsing file: {file_path.name}")#For debug
                 docs, stats = self.parse_file(file_path)
                 self.file_stats[file_path.name] = stats
                 all_docs.extend(docs)

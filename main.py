@@ -1,6 +1,10 @@
-from doc_parser__old import DocParser
+from parsers.doc_parser import DocParser
 import os
 from pathlib import Path
+from utils.logger import setup_colored_logger
+
+logger = setup_colored_logger()
+
 current_dir = Path(os.getcwd())
 images_root = current_dir / "images"
 folder_path = current_dir / "data"
@@ -15,7 +19,7 @@ def main():
         print(f"source: {doc.meta['source']}")
         print(f"category: {doc.meta.get('category')}")
         print(f"file_path: {doc.meta.get('file_path')}")
-        print(f"document_id: {doc.meta.get('document_id')}")
+        print(f"trace: {doc.meta.get('trace')}")
         print(doc.content)
 
 if __name__ == "__main__":

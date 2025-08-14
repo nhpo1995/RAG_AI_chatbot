@@ -1,39 +1,46 @@
 import logging
-import sys
 import colorlog
 
-def get_logger(name: str) -> logging.Logger:
+
+def setup_colored_logger():
     """
-    Hàm khởi tạo và cấu hình một logger với màu sắc.
-    - INFO: Xanh lá
-    - WARNING: Vàng
-    - ERROR: Đỏ
-    - CRITICAL: Đỏ đậm
-    - DEBUG: Xanh dương
+    Thiết lập logger với màu sắc tùy chỉnh.
     """
-    # Lấy logger theo tên
-    logger = colorlog.getLogger(name)
-    if not logger.handlers:
-        logger.setLevel(logging.INFO)
-        # Định nghĩa màu sắc cho từng cấp độ log
-        log_colors = {
-            'DEBUG':    'cyan',
-            'INFO':     'green',
-            'WARNING':  'yellow',
-            'ERROR':    'red',
+    # Lấy logger chính (root logger)
+    logger = colorlog.getLogger()
+    logger.setLevel(logging.DEBUG)  # Đặt mức log thấp nhất để bắt tất cả các level
+
+    # Định dạng của log message
+    formatter = colorlog.ColoredFormatter(
+        '%(log_color)s%(levelname)-8s | %(message)s',
+        log_colors={
+            'DEBUG': 'cyan',
+            'INFO': 'green',
+            'WARNING': 'yellow',
+            'ERROR': 'red',
             'CRITICAL': 'bold_red',
         }
-        # Tạo handler để log ra console
-        handler = colorlog.StreamHandler(sys.stdout)
-        # Tạo formatter với màu sắc
-        formatter = colorlog.ColoredFormatter(
-            '%(log_color)s%(levelname)-8s%(reset)s %(blue)s%(message)s',
-            log_colors=log_colors,
-            reset=True,
-            style='%'
-        )
-        # Gán formatter cho handler
-        handler.setFormatter(formatter)
-        # Thêm handler vào logger
-        logger.addHandler(handler)
+    )
+
+    # Tạo handler để xuất log ra console
+    handler = colorlog.StreamHandler()
+    handler.setFormatter(formatter)
+
+    # Xóa các handler cũ và thêm handler mới để tránh log trùng lặp
+    if logger.hasHandlers():
+        logger.handlers.clear()
+    logger.addHandler(handler)
+
     return logger
+
+
+# --- Sử dụng logger ---
+if __name__ == "__main__":
+    # Thiết lập logger một lần duy nhất khi chương trình bắt đầu
+    logger = setup_colored_logger()
+
+    logger.debug("Đây là một thông điệp debug.")
+    logger.info("Hệ thống đã khởi động thành công.")
+    logger.warning("Cảnh báo: Bộ nhớ sắp đầy.")
+    logger.error("Đã xảy ra lỗi khi kết nối tới cơ sở dữ liệu.")
+    logger.critical("Lỗi nghiêm trọng: Hệ thống không thể tiếp tục hoạt động.")
