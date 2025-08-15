@@ -6,7 +6,7 @@ from typing import List, Dict, Optional, Set, Any, Tuple
 from bs4 import BeautifulSoup
 from haystack import Document
 from haystack_integrations.components.converters.unstructured import UnstructuredFileConverter
-from config import API_URL_UNSTRUCTURED
+from config import API_URL_UNSTRUCTURED, IMAGES_PATH
 
 
 class DocParser:
@@ -17,7 +17,7 @@ class DocParser:
     def __init__(
             self,
             api_url: str = API_URL_UNSTRUCTURED,
-            images_root: Path = Path("images"),
+            images_root: Path = IMAGES_PATH,
             text_categories: Set[str] = None,
             unstructured_kwargs: Optional[Dict[str, Any]] = None,
     ):
@@ -42,7 +42,6 @@ class DocParser:
             progress_bar=False,
             unstructured_kwargs=self.unstructured_kwargs
         )
-        self.file_stats: Dict[str, Dict[str, int]] = {}
 
     # ---------------- commons ----------------
     def is_text_block(self, doc: Document) -> bool:
@@ -130,7 +129,7 @@ class DocParser:
 
 
     # ---------------- Core ----------------
-    def parse_file(self, file_path: Path) -> Tuple[List[Document], Dict[str, int]]:
+    def parse_file(self, file_path: Path) -> List[Document]:
         file_document_id = str(uuid.uuid4())
         result = self.converter.run(paths=[file_path])
         blocks = result["documents"]
@@ -224,20 +223,17 @@ class DocParser:
             "image": len(image_docs),
             "table": len(table_docs),
         }
-        return final_docs, stats
-
+        return final_docs
 
     def run(self, folder_path: Path) -> List[Document]:
         all_docs = []
-        self.file_stats = {}
         # Lọc chỉ lấy file, bỏ qua thư mục con hoặc file ẩn như .DS_Store
         files = [f for f in folder_path.iterdir() if f.is_file() and not f.name.startswith('.')]
         files.sort()
         for file_path in files:
             try:
                 print(f"Parsing file: {file_path.name}")#For debug
-                docs, stats = self.parse_file(file_path)
-                self.file_stats[file_path.name] = stats
+                docs = self.parse_file(file_path)
                 all_docs.extend(docs)
             except Exception as e:
                 print(f"Lỗi khi xử lý file {file_path.name}: {e}")

@@ -1,8 +1,3 @@
-from haystack.components.embedders import (
-    SentenceTransformersDocumentEmbedder,
-    SentenceTransformersTextEmbedder,
-)
-import config as c
 from haystack.components.embedders import OpenAIDocumentEmbedder, OpenAITextEmbedder
 from dotenv import load_dotenv
 

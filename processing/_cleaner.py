@@ -1,5 +1,3 @@
-# cleaner.py (ĐÃ SỬA)
-
 from typing import List, Optional, Dict, Any
 from haystack import Document
 from haystack.components.preprocessors import DocumentCleaner
@@ -10,7 +8,6 @@ class DocumentCleanerWrapper:
     Wrapper cho DocumentCleaner của Haystack.
     Giữ nguyên bảng (category='table'), chỉ làm sạch các loại tài liệu khác.
     """
-
     def __init__(self, cleaner: Optional[DocumentCleaner] = None):
         if cleaner is None:
             self.cleaner = DocumentCleaner(
@@ -33,10 +30,8 @@ class DocumentCleanerWrapper:
                 table_positions[i] = d
             else:
                 other_docs.append(d)
-
         cleaned_result = self.cleaner.run(documents=other_docs)
         cleaned_iter = iter(cleaned_result["documents"])
-
         for i in range(len(documents)):
             if i in table_positions:
                 cleaned_docs.append(table_positions[i])

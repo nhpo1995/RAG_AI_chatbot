@@ -1,5 +1,3 @@
-# chunker.py (ĐÃ SỬA)
-
 from typing import List, Optional, Dict, Any
 from haystack import Document
 from haystack.components.preprocessors import DocumentSplitter
@@ -19,19 +17,17 @@ class DocumentChunkerWrapper:
             self.chunker = chunker
             self.chunker.warm_up()
 
-    def chunk_table(self, doc: Document) -> List[Document]:
+    def chunk_table(doc: Document) -> List[Document]:
         """
         Chunk bảng theo header + nhóm row (ví dụ: 15 hàng một chunk)
         """
         lines = doc.content.strip().split("\n")
         if not lines:
             return [doc]
-
         header = lines[0]
         rows = lines[1:]
         chunk_size = 15
         table_chunks = []
-
         for i in range(0, len(rows), chunk_size):
             chunk_rows = rows[i:i + chunk_size]
             chunk_content = header + "\n" + "\n".join(chunk_rows)
@@ -48,7 +44,6 @@ class DocumentChunkerWrapper:
         """
         final_chunks = []
         text_docs_to_split = []
-
         for doc in documents:
             category = doc.meta.get("category")
             if category == "text":
@@ -57,7 +52,6 @@ class DocumentChunkerWrapper:
                 final_chunks.extend(self.chunk_table(doc))
             else:  # Image và các loại khác
                 final_chunks.append(doc)
-
         # Chunk tất cả các text doc cùng lúc để tối ưu
         if text_docs_to_split:
             result = self.chunker.run(documents=text_docs_to_split)

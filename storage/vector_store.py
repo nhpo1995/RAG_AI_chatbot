@@ -3,7 +3,6 @@ from qdrant_client import models
 import config
 
 
-
 def get_document_store(recreate_index=False) -> QdrantDocumentStore:
     """
     Khởi tạo và trả về một QdrantDocumentStore đã được tối ưu cho hiệu năng và bộ nhớ.

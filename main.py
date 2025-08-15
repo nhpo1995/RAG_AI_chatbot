@@ -1,4 +1,4 @@
-from parsers.doc_parser import DocParser
+from processing._doc_parser import DocParser
 import os
 from pathlib import Path
 from utils.logger import setup_colored_logger

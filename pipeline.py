@@ -1,13 +1,7 @@
-from haystack import Pipeline
-
-from parsers.doc_parser import DocParser
-from processing.cleaner import DocumentCleanerWrapper
-from processing.chunker import DocumentChunkerWrapper
-from processing.embedder import get_document_embedder, get_text_embedder
+from processing import files_to_embed
 from storage.vector_store import get_document_store
 import config as c
 from utils.logger import setup_colored_logger
-from qdrant_client import QdrantClient
 from storage.retriever import get_retriever
 from pprint import pprint
 
@@ -24,15 +18,7 @@ def run_indexing_pipeline():
     chunker = DocumentChunkerWrapper()
     embedder = get_document_embedder()
     print("✅ Đã khởi tạo xong các component.")
-    parsed_docs = parser.run(folder_path=c.DATA_PATH)
-    cleaned_docs = cleaner.run(documents=parsed_docs)
-    chunked_docs = chunker.run(documents=cleaned_docs)
-    for idx, doc in enumerate(chunked_docs):
-        print(f"chunk {idx + 1} of {len(chunked_docs)}")
-        pprint(f"chunk content: {doc.content}")
-    embedded_docs = embedder.run(documents=chunked_docs)["documents"]
-    document_store.write_documents(embedded_docs)
-    print(f"all documents written to {c.DATA_PATH} with {len(chunked_docs)} chunks.")
+
 
 def get_answer():
     document_store = get_document_store(recreate_index=False)

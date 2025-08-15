@@ -1,8 +1,12 @@
 import gradio as gr
+import time
+from typing import List
+from haystack import Document
 from pathlib import Path
 import shutil
-import time
-import config  # chứa DATA_PATH, IMAGES_PATH
+import config
+from agent.rag_agent import RAGAssistant
+from storage.qdrant_query_manager import QdrantQueryManager
 
 # --- SETUP THƯ MỤC --- #
 UPLOAD_FOLDER = config.DATA_PATH
@@ -28,7 +32,7 @@ def delete_file(filenames):
         path = UPLOAD_FOLDER / fn
         if path.exists():
             path.unlink()
-    return list_files()  # Trả về danh sách file mới sau khi xóa
+    return list_files()
 
 def delete_all_files():
     """Xóa tất cả file và cập nhật danh sách"""
@@ -36,34 +40,56 @@ def delete_all_files():
     UPLOAD_FOLDER.mkdir(exist_ok=True)
     return list_files()
 
-# --- CHAT AI --- #
-chat_history = []
-
-def respond(user_message):
-    """AI trả lời với trạng thái thinking"""
-    chat_history.append({"role": "user", "content": user_message})
-
-    # Hiển thị thinking
-    temp_history = chat_history + [{"role": "assistant", "content": "thinking..."}]
-
-    # Giả lập delay AI xử lý
-    time.sleep(1.5)
-
-    # Ví dụ AI trả lời (thay bằng RAG thực tế)
-    ai_answer = (
-        f"**AI trả lời:**\n\n"
-        f"| Column1 | Column2 |\n"
-        f"|---------|---------|\n"
-        f"| Data1   | Data2   |\n"
-        f"![Ảnh](./user_uploads/example.png)"
+def docs_to_context(docs: List[Document]) -> str:
+    """
+    Gộp toàn bộ content của docs thành 1 chuỗi context cho AI.
+    Bỏ qua metadata.
+    """
+    return "\n\n".join(
+        doc.content.strip()
+        for doc in docs
+        if doc.content and doc.content.strip()
     )
-
-    chat_history[-1] = {"role": "assistant", "content": ai_answer}
-    return chat_history
+# --- CHAT AI --- #
+rag_agent = RAGAssistant()
+query_manager = QdrantQueryManager()
+chat_history = []
+def respond(user_message):
+    chat_history.append({"role": "user", "content": user_message})
+    temp_history = chat_history + [{"role": "assistant", "content": "thinking..."}]
+    query = user_message
+    context = docs_to_context(query_manager.semantic_search(query=query, filters=None))
+    ai_answer = rag_agent.ask(context=context, question=query)
+    chat_history.append({"role": "assistant", "content": ai_answer})
+    # chat_history[-1] = {"role": "assistant", "content": ai_answer}
+    return chat_history, ""
 
 # --- BUILD GRADIO UI --- #
 with gr.Blocks() as demo:
-    # --- MÀN HÌNH 1: File Upload & Manage --- #
+# =============================================================================================
+    # --- MÀN HÌNH 1: Chat với AI () --- #
+    with gr.Tab("Chat with AI"):
+        gr.Markdown("### Hỏi đáp với AI")
+        radio = gr.Radio(
+            ["Admin", "manager", "staff"],
+            label="Select your permission"
+        )
+        with gr.Row():
+            chatbox = gr.Chatbot(label="Chatbot", type="messages", height=500)
+
+        msg = gr.Textbox(
+            label="",
+            placeholder="Nhập câu hỏi và nhấn Enter để gửi, Shift+Enter để xuống dòng",
+            lines=1,  # Chiều cao ban đầu nhỏ
+            max_lines=10,  # Tự động mở rộng tối đa
+            show_label=False,
+            submit_btn="Send",  # Nút gửi tích hợp trong textbox
+        )
+
+        # Event gửi tin nhắn khi Enter hoặc nhấn nút
+        msg.submit(fn=respond, inputs=msg, outputs=[chatbox, msg], api_name="/ask")
+# ==============================================================================================
+    # --- MÀN HÌNH 2: File Upload & Manage --- #
     with gr.Tab("File Upload & Manage"):
         gr.Markdown("### Quản lý file người dùng upload")
 
@@ -94,23 +120,6 @@ with gr.Blocks() as demo:
         # Event xóa tất cả file và cập nhật danh sách
         btn_delete_all.click(delete_all_files, [], file_list)
 
-    # --- MÀN HÌNH 2: Chat với AI (Gemini Style) --- #
-    with gr.Tab("Chat with AI"):
-        gr.Markdown("### Hỏi đáp với AI")
 
-        with gr.Row():
-            chatbox = gr.Chatbot(label="Gemini Chat", type="messages", height=500)
-
-        msg = gr.Textbox(
-            label="",
-            placeholder="Nhập câu hỏi và nhấn Enter để gửi, Shift+Enter để xuống dòng",
-            lines=1,          # Chiều cao ban đầu nhỏ
-            max_lines=10,     # Tự động mở rộng tối đa
-            show_label=False,
-            submit_btn="Send",  # Nút gửi tích hợp trong textbox
-        )
-
-        # Event gửi tin nhắn khi Enter hoặc nhấn nút
-        msg.submit(respond, msg, chatbox)
 
 demo.launch()
