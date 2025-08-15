@@ -30,9 +30,9 @@ def run_indexing_pipeline():
     for idx, doc in enumerate(chunked_docs):
         print(f"chunk {idx + 1} of {len(chunked_docs)}")
         pprint(f"chunk content: {doc.content}")
-    # embedded_docs = embedder.run(documents=chunked_docs)["documents"]
-    # document_store.write_documents(embedded_docs)
-    # print(f"all documents written to {c.DATA_PATH} with {len(chunked_docs)} chunks.")
+    embedded_docs = embedder.run(documents=chunked_docs)["documents"]
+    document_store.write_documents(embedded_docs)
+    print(f"all documents written to {c.DATA_PATH} with {len(chunked_docs)} chunks.")
 
 def get_answer():
     document_store = get_document_store(recreate_index=False)
@@ -53,5 +53,5 @@ def get_answer():
         print(f"file_path: {doc.meta.get('file_path')}")
 
 if __name__ == "__main__":
-    # run_indexing_pipeline()
+    run_indexing_pipeline()
     get_answer()

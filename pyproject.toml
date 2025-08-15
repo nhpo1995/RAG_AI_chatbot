@@ -18,4 +18,8 @@ dependencies = [
     "haystack-ai>=2.16.1",
     "qdrant-haystack>=9.2.0",
     "python-dotenv>=1.1.1",
+    "gradio>=5.42.0",
+    "langchain>=0.3.27",
+    "langchain-openai>=0.3.30",
+    "markdown>=3.8.2",
 ]

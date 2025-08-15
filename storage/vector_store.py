@@ -1,8 +1,7 @@
-# storage/vector_store.py
 from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
 from qdrant_client import models
 import config
-from qdrant_client import QdrantClient
+
 
 
 def get_document_store(recreate_index=False) -> QdrantDocumentStore:
