@@ -1,18 +1,35 @@
-import gradio as gr
+import threading
 import time
-from typing import List
-from haystack import Document
+import gradio as gr
 from pathlib import Path
 import shutil
 import config
-from agent.rag_agent import RAGAssistant
-from storage.qdrant_query_manager import QdrantQueryManager
+from services.rag_service import RAGService
+from services.db_service import DBService
 
-# --- SETUP THƯ MỤC --- #
+# --- CONSTANT --- #
 UPLOAD_FOLDER = config.DATA_PATH
 UPLOAD_FOLDER.mkdir(exist_ok=True)
+db_service = DBService()
+rag_service = RAGService()
 
 # --- FUNCTIONS --- #
+def run_with_status(
+    fn_to_run, status_message="Đang thực hiện...", success_message="Hoàn thành!"
+):
+    """
+    Chạy một function bất kỳ, trả về dict để cập nhật Label trong Gradio.
+    """
+    status = gr.update(value=status_message, visible=True)
+    def task():
+        fn_to_run()
+        status_after = gr.update(value=success_message, visible=True)
+        time.sleep(3)
+        status_after = gr.update(visible=False)
+        return status_after
+    threading.Thread(target=task).start()
+    return status
+
 def list_files():
     """Trả về danh sách file hiện có trong folder upload"""
     return [f.name for f in UPLOAD_FOLDER.iterdir() if f.is_file()]
@@ -40,30 +57,17 @@ def delete_all_files():
     UPLOAD_FOLDER.mkdir(exist_ok=True)
     return list_files()
 
-def docs_to_context(docs: List[Document]) -> str:
-    """
-    Gộp toàn bộ content của docs thành 1 chuỗi context cho AI.
-    Bỏ qua metadata.
-    """
-    return "\n\n".join(
-        doc.content.strip()
-        for doc in docs
-        if doc.content and doc.content.strip()
-    )
 # --- CHAT AI --- #
-rag_agent = RAGAssistant()
-query_manager = QdrantQueryManager()
 chat_history = []
 def respond(user_message):
     chat_history.append({"role": "user", "content": user_message})
     temp_history = chat_history + [{"role": "assistant", "content": "thinking..."}]
-    query = user_message
-    context = docs_to_context(query_manager.semantic_search(query=query, filters=None))
-    ai_answer = rag_agent.ask(context=context, question=query)
-    chat_history.append({"role": "assistant", "content": ai_answer})
-    # chat_history[-1] = {"role": "assistant", "content": ai_answer}
+    ai_answer = rag_service.semantic_query(query=user_message)
+    # chat_history.append({"role": "assistant", "content": ai_answer})
+    chat_history[-1] = {"role": "assistant", "content": ai_answer}
     return chat_history, ""
-
+def reload_database() ->None:
+    db_service.reload_vector_db()
 # --- BUILD GRADIO UI --- #
 with gr.Blocks() as demo:
 # =============================================================================================
@@ -76,17 +80,24 @@ with gr.Blocks() as demo:
         )
         with gr.Row():
             chatbox = gr.Chatbot(label="Chatbot", type="messages", height=500)
-
         msg = gr.Textbox(
             label="",
             placeholder="Nhập câu hỏi và nhấn Enter để gửi, Shift+Enter để xuống dòng",
-            lines=1,  # Chiều cao ban đầu nhỏ
-            max_lines=10,  # Tự động mở rộng tối đa
+            lines=1,
+            max_lines=10,
             show_label=False,
             submit_btn="Send",  # Nút gửi tích hợp trong textbox
         )
-
-        # Event gửi tin nhắn khi Enter hoặc nhấn nút
+        # Label hiển thị trạng thái reload
+        reload_status = gr.Label(value="", visible=False)
+        reload_btn = gr.Button("Reload Database")
+        reload_btn.click(
+            fn=lambda: run_with_status(
+                reload_database, "Đang reload DB...", "Reload thành công!"
+            ),
+            inputs=None,
+            outputs=reload_status,
+        )
         msg.submit(fn=respond, inputs=msg, outputs=[chatbox, msg], api_name="/ask")
 # ==============================================================================================
     # --- MÀN HÌNH 2: File Upload & Manage --- #

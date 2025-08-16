@@ -16,7 +16,7 @@ class QdrantManager:
     """
     def __init__(self, document_store: QdrantDocumentStore):
         self.store: QdrantDocumentStore = document_store or get_document_store()
-        self.client: QdrantClient = self.store.client  # type: ignore
+        self.client: QdrantClient = self.store._client
 
     def add_chunks(self, docs_dict: Dict[str, List[Document]]):
         """

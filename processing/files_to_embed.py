@@ -1,7 +1,7 @@
 from pathlib import Path
 from processing._chunker import DocumentChunkerWrapper
 from processing._cleaner import DocumentCleanerWrapper
-from processing._embedder import get_document_embedder
+from processing.embedder import get_document_embedder
 from processing._doc_parser import DocParser
 from haystack import Document
 from typing import List, Dict

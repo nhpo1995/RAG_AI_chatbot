@@ -44,7 +44,7 @@ class QdrantQueryManager:
         """
         if not query:
             return []
-        embed_result = self.text_embedder.run({"text": query})
+        embed_result = self.text_embedder.run(text=query)
         embedded_query = embed_result["embedding"]
         retriever = self.get_retriever(top_k=top_k, filters=filters)
         result = retriever.run(query_embedding=embedded_query)
