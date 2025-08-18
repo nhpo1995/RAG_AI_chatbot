@@ -17,7 +17,7 @@ class DocumentChunkerWrapper:
             self.chunker = chunker
             self.chunker.warm_up()
 
-    def chunk_table(doc: Document) -> List[Document]:
+    def chunk_table(self, doc: Document) -> List[Document]:
         """
         Chunk bảng theo header + nhóm row (ví dụ: 15 hàng một chunk)
         """

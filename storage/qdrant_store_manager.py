@@ -16,7 +16,7 @@ class QdrantManager:
     """
     def __init__(self, document_store: QdrantDocumentStore):
         self.store: QdrantDocumentStore = document_store or get_document_store()
-        self.client: QdrantClient = self.store._client
+        self.client: QdrantClient = self.store._client #type: ignore
 
     def add_chunks(self, docs_dict: Dict[str, List[Document]]):
         """
@@ -28,6 +28,7 @@ class QdrantManager:
                 continue
             logger.info(f"Thêm {len(docs)} chunks cho file: {file_source}")
             self.store.write_documents(docs)
+        return self.store
 
     def update_chunks(self, docs_dict: Dict[str, List[Document]]):
         """
@@ -39,6 +40,7 @@ class QdrantManager:
             self.delete_file(file_source)
             self.store.write_documents(docs)
             logger.info(f"Update thành công file: {file_source}")
+        return self.store
 
     def delete_file(self, file_source: str):
         """

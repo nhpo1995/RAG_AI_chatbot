@@ -62,7 +62,7 @@ chat_history = []
 def respond(user_message):
     chat_history.append({"role": "user", "content": user_message})
     temp_history = chat_history + [{"role": "assistant", "content": "thinking..."}]
-    ai_answer = rag_service.semantic_query(query=user_message)
+    ai_answer = rag_service.semantic_query(query=user_message, top_k=10)
     # chat_history.append({"role": "assistant", "content": ai_answer})
     chat_history[-1] = {"role": "assistant", "content": ai_answer}
     return chat_history, ""

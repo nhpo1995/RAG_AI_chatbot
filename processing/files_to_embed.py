@@ -7,6 +7,7 @@ from haystack import Document
 from typing import List, Dict
 from utils.logger import setup_colored_logger
 import logging
+
 setup_colored_logger()
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,18 @@ class DocToEmbed:
                 logger.error(f"[process_list_file] Lỗi xử lý file {file_path}: {e}")
         logger.info(f"[process_list_file] Hoàn tất: {len(grouped_docs)} file, {total_chunks} chunks.")
         return grouped_docs
+
+    def test_parser(self, folder_path: Path):
+        parsed_docs = self.parser.run(folder_path=folder_path)
+        for idx, doc in enumerate(parsed_docs):
+            print(f"{idx}. {doc.meta['filename']}")
+            print(f"content: {doc.content}")
+
+
+if __name__ == "__main__":
+    import config
+    pipe = DocToEmbed()
+    pipe.test_parser(config.DATA_PATH)
 
 
 

@@ -20,6 +20,9 @@ class QdrantQueryManager:
 
     def __init__(self, document_store: Optional[QdrantDocumentStore] = None):
         self.document_store = document_store or get_document_store()
+        logger.info(
+            f"[QdrantQueryManager] Truy vấn collection: {self.document_store.index}"
+        )
         self.text_embedder = get_text_embedder()
 
     def get_retriever(
@@ -27,7 +30,7 @@ class QdrantQueryManager:
         document_store: Optional[QdrantDocumentStore] = None,
         top_k: int = 5,
         filters: Optional[Union[Dict[str, Any], Filter]] = None,
-        score_threshold: float = 0.65,
+        score_threshold: float = 0.4,
     ) -> QdrantEmbeddingRetriever:
         return QdrantEmbeddingRetriever(
             document_store=self.document_store,
