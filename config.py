@@ -10,7 +10,7 @@ IMAGES_PATH = BASE_PATH / "images"
 
 
 # Models
-EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+EMBEDDING_MODEL = "text-embedding-3-small"
 LLM_MODEL = "gpt-4o-mini"
 
 # Qdrant config

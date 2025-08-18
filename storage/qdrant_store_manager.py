@@ -1,7 +1,8 @@
 from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
 from typing import List, Dict
 from haystack import Document
-from qdrant_client.http.models import Filter, FieldCondition, MatchValue
+from qdrant_client.http.models import Filter, FieldCondition, MatchValue, FilterSelector
+from qdrant_client.http import models
 from qdrant_client import QdrantClient
 from utils.logger import setup_colored_logger
 from storage.vector_store import get_document_store
@@ -89,3 +90,63 @@ class QdrantManager:
             next_offset += limit
         logger.info(f"Lấy {len(documents)} chunks cho file: {file_source}")
         return documents
+
+    def clear_all_vectors(self):
+        """
+        Xóa toàn bộ vectors trong collection.
+        """
+        try:
+            # Cách 1: Xóa toàn bộ points trong collection (giữ lại collection structure)
+            collection_info = self.client.get_collection(self.store.index)
+            if collection_info.points_count > 0:
+                # Xóa tất cả points bằng cách delete với filter trống
+                result = self.client.delete(
+                    collection_name=self.store.index,
+                    points_selector=models.FilterSelector(
+                        filter=models.Filter()  # Empty filter = all points
+                    )
+                )
+                if hasattr(result, 'status') and result.status == "ok":
+                    logger.info(f"Đã xóa toàn bộ {collection_info.points_count} vectors trong collection: {self.store.index}")
+                else:
+                    raise Exception("Delete operation failed")
+            else:
+                logger.info(f"Collection {self.store.index} đã trống")
+                
+        except Exception as e:
+            logger.warning(f"Không thể xóa points, thử xóa và tạo lại collection: {e}")
+            # Fallback: xóa collection và tạo lại
+            try:
+                self.client.delete_collection(self.store.index)
+                logger.info(f"Đã xóa collection: {self.store.index}")
+                
+                # Tạo lại collection với cùng config
+                from storage.vector_store import get_document_store
+                new_store = get_document_store(recreate_index=True)
+                self.store = new_store
+                logger.info(f"Đã tạo lại collection: {self.store.index}")
+                
+            except Exception as e2:
+                logger.error(f"Lỗi khi tạo lại collection: {e2}")
+                raise e2
+
+    def rebuild_from_folder(self, folder_path):
+        """
+        Xóa toàn bộ vectors và rebuild từ folder.
+        """
+        from processing.files_to_embed import DocToEmbed  
+        logger.info("Bắt đầu rebuild database...")
+        # 1. Xóa toàn bộ vectors
+        self.clear_all_vectors()
+        # 2. Process folder và add chunks
+        processor = DocToEmbed()
+        embedded_docs = processor.process_folder(folder_path)
+        # 3. Add chunks vào DB
+        if embedded_docs:
+            self.add_chunks(embedded_docs)
+            total_chunks = sum(len(docs) for docs in embedded_docs.values())
+            logger.info(f"Rebuild hoàn tất: {len(embedded_docs)} files, {total_chunks} chunks")
+        else:
+            logger.warning("Không có documents nào được process")
+        return embedded_docs
+

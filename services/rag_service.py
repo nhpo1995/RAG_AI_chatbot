@@ -19,11 +19,15 @@ class RAGService:
         Gộp toàn bộ content của docs thành 1 chuỗi context cho AI.
         Bỏ qua metadata.
         """
-        return "\n\n".join(
-            doc.content.strip()
-            for doc in docs
-            if doc.content and doc.content.strip()
-        )
+        context = []
+        if not docs:
+            return ""
+        for doc in docs:
+            if doc.content and doc.content.strip():
+                context.append(doc.content.strip())
+                if doc.meta.get("category") == "image":
+                    context.append(f"file_path: {doc.meta.get('filepath')}")
+        return "\n\n".join(context)
 
     def semantic_query(self, query: str, top_k: int) -> str:
         context = self._docs_to_context(
