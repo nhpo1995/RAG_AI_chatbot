@@ -1,0 +1,244 @@
+from __future__ import annotations
+from pathlib import Path
+from typing import List, Dict, Optional
+import uuid
+import re
+from collections import defaultdict
+
+# Haystack 2.x
+from haystack import Document
+
+# Docling
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling_core.types.doc import TextItem, SectionHeaderItem, TableItem, PictureItem
+
+
+class PdfParser:
+    """
+    Docling-only parser cho PDF sạch (text-based):
+
+    - Text: gộp toàn bộ theo MỖI TRANG -> 1 Document (category="text").
+    - Table: content = <văn cảnh ngay trước> + Markdown; HTML gốc vào meta.table_html.
+    - Image: lưu ảnh vào images/<filename_wo_ext>/..., content = <văn cảnh ngay trước>; meta.filepath.
+    - Metadata: category, source, filename, document_id, trace="Trang {page}" (ảnh thêm filepath).
+    """
+
+    # -------------------------
+    # Khởi tạo & cấu hình
+    # -------------------------
+    def __init__(
+        self,
+        images_root: str | Path = "images",
+        context_sentences: int = 3,
+        buffer_max_sentences: int = 6,
+        image_scale: float = 2.0,
+    ) -> None:
+        self.images_root = Path(images_root)
+        self.context_sentences = int(context_sentences)
+        self.buffer_max_sentences = int(buffer_max_sentences)
+        self.image_scale = float(image_scale)
+        self.converter = self._make_converter()
+
+    # -------------------------
+    # Helpers
+    # -------------------------
+    _SENT_SPLIT = re.compile(r"(?<=[\.!?])\s+(?=[A-ZÀ-Ỵ])|(?<=[\.!\?])\s+(?=\d+)|\n{2,}")
+
+    @staticmethod
+    def _split_sentences(text: str) -> List[str]:
+        sents = [s.strip() for s in PdfParser._SENT_SPLIT.split(text or "") if s.strip()]
+        return sents or [ln.strip() for ln in (text or "").splitlines() if ln.strip()]
+
+    @staticmethod
+    def _normalize_text(t: str) -> str:
+        if not t:
+            return ""
+        # gỡ ngắt dòng có gạch nối, bỏ soft-hyphen, gom khoảng trắng
+        t = re.sub(r"-\s*\n", "", t)
+        t = t.replace("\u00ad", "")
+        t = re.sub(r"\s*\n\s*", " ", t)
+        t = re.sub(r"\s{2,}", " ")
+        return t.strip()
+
+    def _make_converter(self) -> DocumentConverter:
+        pdf_opts = PdfPipelineOptions()
+        pdf_opts.images_scale = self.image_scale
+        pdf_opts.generate_picture_images = True  # PictureItem.get_image(...)
+        return DocumentConverter(format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pdf_opts)})
+
+    @staticmethod
+    def _file_document_id(path: Path) -> str:
+        st = path.stat()
+        seed = f"{path.resolve()}:{st.st_size}:{st.st_mtime_ns}"
+        return str(uuid.uuid5(uuid.NAMESPACE_URL, seed))
+
+    @staticmethod
+    def _resolve_page_no(el, current_page: Optional[int] = None) -> int:
+        """
+        Best-effort lấy số trang cho element Docling.
+        - el.prov thường là LIST các ProvenanceItem => dùng prov[0].page_no
+        - Nếu không có, fallback về current_page
+        - Chuẩn hoá về 1-based nếu trả 0-based
+        """
+        prov = getattr(el, "prov", None)
+        page: Optional[int] = None
+
+        if isinstance(prov, list) and len(prov) > 0:
+            p = getattr(prov[0], "page_no", None)
+            if p is None and isinstance(prov[0], dict):
+                p = prov[0].get("page_no")
+            if isinstance(p, (int, float)):
+                page = int(p)
+        elif hasattr(prov, "page_no"):
+            p = getattr(prov, "page_no")
+            if isinstance(p, (int, float)):
+                page = int(p)
+
+        if page is not None:
+            return page + 1 if page == 0 else page
+        return int(current_page) if current_page is not None else 1
+
+    # -------------------------
+    # Public API
+    # -------------------------
+    def parse(self, pdf_path: str | Path) -> List[Document]:
+        """
+        Đọc PDF sạch và trả về danh sách haystack.Document:
+          - category="text"  : nội dung cả trang (đã gom)
+          - category="table" : context trước + Markdown; meta.table_html giữ HTML gốc
+          - category="image" : context trước; meta.filepath trỏ tới ảnh đã lưu
+        """
+        pdf_path = Path(pdf_path)
+        source = str(pdf_path.resolve())
+        filename = pdf_path.name
+        fname_wo = pdf_path.stem
+        document_id = self._file_document_id(pdf_path)
+
+        images_dir = self.images_root / fname_wo
+        images_dir.mkdir(parents=True, exist_ok=True)
+
+        conv_res = self.converter.convert(pdf_path)
+        d = conv_res.document
+
+        # Gom text theo trang + buffer câu để lấy context ngay trước
+        page_texts: Dict[int, List[str]] = defaultdict(list)
+        page_buffers: Dict[int, List[str]] = defaultdict(list)
+        picture_counters: Dict[int, int] = defaultdict(int)
+        docs: List[Document] = []
+
+        current_page: Optional[int] = None
+
+        # Duyệt theo reading order
+        for el, _lvl in d.iterate_items():
+            page_no = self._resolve_page_no(el, current_page)
+            current_page = page_no
+            trace = f"Trang {page_no}"
+
+            # --- TEXT ---
+            if isinstance(el, (TextItem, SectionHeaderItem)) or getattr(el, "text", None):
+                text = self._normalize_text(getattr(el, "text", "")).strip()
+                if not text:
+                    continue
+                page_texts[page_no].append(text)
+
+                # cập nhật buffer câu cho context
+                for s in self._split_sentences(text):
+                    if s:
+                        page_buffers[page_no].append(s)
+                if len(page_buffers[page_no]) > self.buffer_max_sentences:
+                    page_buffers[page_no] = page_buffers[page_no][-self.buffer_max_sentences:]
+
+            # --- TABLE ---
+            elif isinstance(el, TableItem):
+                buf = page_buffers.get(page_no, [])
+                ctx = " ".join(buf[-self.context_sentences:]).strip()
+
+                # Bảng: Markdown cho content; HTML cho meta
+                try:
+                    md = el.export_to_markdown(doc=d)
+                except TypeError:
+                    md = el.export_to_markdown()
+                html = el.export_to_html(doc=d)
+
+                content = (ctx + "\n\n" if ctx else "") + (md or "")
+                docs.append(Document(
+                    content=content,
+                    meta={
+                        "category": "table",
+                        "source": source,
+                        "filename": filename,
+                        "document_id": document_id,
+                        "trace": trace,
+                        "table_html": html or "",
+                    },
+                ))
+
+            # --- IMAGE ---
+            elif isinstance(el, PictureItem):
+                picture_counters[page_no] += 1
+                img_name = f"page_{page_no}_img_{picture_counters[page_no]}.png"
+                img_path = images_dir / img_name
+
+                try:
+                    pil = el.get_image(d)  # PIL.Image
+                    pil.save(img_path, "PNG")
+                except Exception:
+                    # Nếu ảnh không sẵn có (hiếm với PDF sạch), bỏ qua ảnh này
+                    continue
+
+                buf = page_buffers.get(page_no, [])
+                ctx = " ".join(buf[-self.context_sentences:]).strip()
+
+                docs.append(Document(
+                    content=ctx,
+                    meta={
+                        "category": "image",
+                        "source": source,
+                        "filename": filename,
+                        "document_id": document_id,
+                        "trace": trace,
+                        "filepath": str(img_path.resolve()),
+                    },
+                ))
+
+            # các loại phần tử khác: bỏ qua
+
+        # Sau khi duyệt xong: phát hành 1 Document \"text\" cho mỗi trang
+        for page_no in sorted(page_texts.keys()):
+            full_page_text = "\n\n".join(page_texts[page_no]).strip()
+            if not full_page_text:
+                continue
+            docs.append(Document(
+                content=full_page_text,
+                meta={
+                    "category": "text",
+                    "source": source,
+                    "filename": filename,
+                    "document_id": document_id,
+                    "trace": f"Trang {page_no}",
+                },
+            ))
+
+        return docs
+
+
+if __name__ == "__main__":
+    # Ví dụ dùng: python docling_pdf_parser.py /path/to/file.pdf [images_root]
+    import sys
+    if len(sys.argv) < 2:
+        print("Usage: python docling_pdf_parser.py <pdf_path> [images_root]")
+        sys.exit(0)
+    pdf_arg = sys.argv[1]
+    images_root = sys.argv[2] if len(sys.argv) > 2 else "images"
+
+    parser = PdfParser(images_root=images_root)
+    docs = parser.parse(pdf_arg)
+    print(f"Generated {len(docs)} Documents")
+    for d in docs:
+        print("=" * 20)
+        print("source:\t", d.meta.get("source"))
+        print("trace:\t", d.meta.get("trace"))
+        print("category:", d.meta.get("category"))
+        print("content:\n", (d.content or "")[:400].replace("\n", " ") + ("..." if d.content and len(d.content) > 400 else ""))
