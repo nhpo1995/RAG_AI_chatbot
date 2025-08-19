@@ -24,11 +24,19 @@ class TxtParser:
     ) -> None:
         self.group_max_paragraphs = int(group_max_paragraphs)
         self.group_max_chars = int(group_max_chars)
-        self.encoding_candidates = encoding_candidates or ["utf-8-sig", "utf-8", "utf-16", "cp1258", "latin-1"]
+        self.encoding_candidates = encoding_candidates or [
+            "utf-8-sig",
+            "utf-8",
+            "utf-16",
+            "cp1258",
+            "latin-1",
+        ]
 
     # --- helpers (đưa vào class) ---
     _PARA_SPLIT = re.compile(r"\n\s*\n+", flags=re.MULTILINE)
-    _SENT_SPLIT = re.compile(r"(?<=[\.!?])\s+(?=[A-ZÀ-Ỵ])|(?<=[\.!\?])\s+(?=\d+)|\n{2,}")
+    _SENT_SPLIT = re.compile(
+        r"(?<=[\.!?])\s+(?=[A-ZÀ-Ỵ])|(?<=[\.!\?])\s+(?=\d+)|\n{2,}"
+    )
 
     @staticmethod
     def _normalize_text(t: str) -> str:
@@ -71,7 +79,11 @@ class TxtParser:
 
         raw = self._read_text(txt_path)
         # tách đoạn — coi 1+ dòng trống là ranh giới
-        paras = [self._normalize_text(p) for p in self._PARA_SPLIT.split(raw) if self._normalize_text(p)]
+        paras = [
+            self._normalize_text(p)
+            for p in self._PARA_SPLIT.split(raw)
+            if self._normalize_text(p)
+        ]
         if not paras:
             return []
 
@@ -84,21 +96,25 @@ class TxtParser:
                 return
             content = "\n\n".join(bucket).strip()
             if content:
-                docs.append(Document(
-                    content=content,
-                    meta={
-                        "category": "text",
-                        "source": source,
-                        "filename": filename,
-                        "document_id": document_id,
-                        "trace": f"Khối {bucket_idx + 1}",
-                    },
-                ))
+                docs.append(
+                    Document(
+                        content=content,
+                        meta={
+                            "category": "text",
+                            "source": source,
+                            "filename": filename,
+                            "document_id": document_id,
+                            "trace": f"Khối {bucket_idx + 1}",
+                        },
+                    )
+                )
             bucket, bucket_chars = [], 0
             bucket_idx += 1
 
         for p in paras:
-            if (len(bucket) >= self.group_max_paragraphs) or (bucket_chars + len(p) > self.group_max_chars):
+            if (len(bucket) >= self.group_max_paragraphs) or (
+                bucket_chars + len(p) > self.group_max_chars
+            ):
                 flush()
             bucket.append(p)
             bucket_chars += len(p)
@@ -109,6 +125,7 @@ class TxtParser:
 
 if __name__ == "__main__":
     import config as cf
+
     file_path = cf.DATA_PATH / "kinh-te-vi-mo-vn-2025.txt"
     parser = TxtParser()
     docs = parser.parse(str(file_path))

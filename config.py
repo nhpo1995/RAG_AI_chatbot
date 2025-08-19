@@ -17,6 +17,4 @@ LLM_MODEL = "gpt-4o-mini"
 # docker run -p 6333:6333 qdrant/qdrant
 VECTOR_DB_URL = "http://localhost:6333"
 VECTOR_DB_COLLECTION = "Document"
-RECREATE_INDEX=True #Ghi de
-
-
+RECREATE_INDEX = True  # Ghi de

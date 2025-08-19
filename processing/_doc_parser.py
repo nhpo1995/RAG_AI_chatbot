@@ -5,7 +5,9 @@ from pathlib import Path
 from typing import List, Dict, Optional, Set, Any, Tuple
 from bs4 import BeautifulSoup
 from haystack import Document
-from haystack_integrations.components.converters.unstructured import UnstructuredFileConverter
+from haystack_integrations.components.converters.unstructured import (
+    UnstructuredFileConverter,
+)
 from config import API_URL_UNSTRUCTURED, IMAGES_PATH, DATA_PATH
 
 
@@ -14,12 +16,13 @@ class DocParser:
     Bộ parser trích xuất text, image, table từ file (PDF, DOCX, XLSX, ...).
     Tự động lưu ảnh ra local và tạo document_id riêng cho mỗi file.
     """
+
     def __init__(
-            self,
-            api_url: str = API_URL_UNSTRUCTURED,
-            images_root: Path = IMAGES_PATH,
-            text_categories: Set[str] = None,
-            unstructured_kwargs: Optional[Dict[str, Any]] = None,
+        self,
+        api_url: str = API_URL_UNSTRUCTURED,
+        images_root: Path = IMAGES_PATH,
+        text_categories: Set[str] = None,
+        unstructured_kwargs: Optional[Dict[str, Any]] = None,
     ):
         self.api_url = api_url
         self.images_root = images_root
@@ -40,13 +43,12 @@ class DocParser:
             document_creation_mode="one-doc-per-element",
             separator="\n\n",
             progress_bar=False,
-            unstructured_kwargs=self.unstructured_kwargs
+            unstructured_kwargs=self.unstructured_kwargs,
         )
 
     # ---------------- commons ----------------
     def is_text_block(self, doc: Document) -> bool:
         return doc.meta.get("category") in self.text_categories
-
 
     def nearest_text(self, blocks: List[Document], idx: int, direction: int) -> str:
         j = idx + direction
@@ -86,8 +88,14 @@ class DocParser:
 
         return "\n".join(md_lines).strip()
 
-    def process_table_block(self, blocks: List[Document], idx: int, file_path: Path, file_document_id: str,
-        is_in_image: bool = False) -> Document:
+    def process_table_block(
+        self,
+        blocks: List[Document],
+        idx: int,
+        file_path: Path,
+        file_document_id: str,
+        is_in_image: bool = False,
+    ) -> Document:
         d = blocks[idx]
         if "text_as_html" in d.meta:
             md = self.html_table_to_markdown(d.meta["text_as_html"])
@@ -126,7 +134,6 @@ class DocParser:
         except Exception:
             return False
 
-
     # ---------------- Core ----------------
     def parse_file(self, file_path: Path) -> List[Document]:
         file_document_id = str(uuid.uuid4())
@@ -150,30 +157,34 @@ class DocParser:
         for page_number, page_texts in paged_texts.items():
             merged_page_content = "\n\n".join(page_texts).strip()
             if merged_page_content:
-                text_docs.append(Document(
-                    content=merged_page_content,
-                    meta={
-                        "category": "text",
-                        "source": str(file_path),
-                        "filename": file_path.name,
-                        "document_id": file_document_id,
-                        "trace": f"Trang {page_number}",  # <-- Thay thế page_number bằng trace
-                    }
-                ))
+                text_docs.append(
+                    Document(
+                        content=merged_page_content,
+                        meta={
+                            "category": "text",
+                            "source": str(file_path),
+                            "filename": file_path.name,
+                            "document_id": file_document_id,
+                            "trace": f"Trang {page_number}",  # <-- Thay thế page_number bằng trace
+                        },
+                    )
+                )
         # Tạo một doc duy nhất cho text không phân trang (Word, TXT...)
         if unpaged_texts:
             merged_unpaged_content = "\n\n".join(unpaged_texts).strip()
             if merged_unpaged_content:
-                text_docs.append(Document(
-                    content=merged_unpaged_content,
-                    meta={
-                        "category": "text",
-                        "source": str(file_path),
-                        "filename": file_path.name,
-                        "document_id": file_document_id,
-                        "trace": "Nội dung văn bản",  # <-- Trace chung cho file không có trang
-                    }
-                ))
+                text_docs.append(
+                    Document(
+                        content=merged_unpaged_content,
+                        meta={
+                            "category": "text",
+                            "source": str(file_path),
+                            "filename": file_path.name,
+                            "document_id": file_document_id,
+                            "trace": "Nội dung văn bản",  # <-- Trace chung cho file không có trang
+                        },
+                    )
+                )
         # 2) Xử lý Image
         image_docs = []
         for idx, d in enumerate(blocks):
@@ -187,7 +198,11 @@ class DocParser:
                 if self.save_image(d.meta["image_base64"], img_path):
                     prev_txt = self.nearest_text(blocks, idx, -1)
                     next_txt = self.nearest_text(blocks, idx, 1)
-                    context = (f"{prev_txt}\n\n{next_txt}" if prev_txt and next_txt else prev_txt or next_txt).strip()
+                    context = (
+                        f"{prev_txt}\n\n{next_txt}"
+                        if prev_txt and next_txt
+                        else prev_txt or next_txt
+                    ).strip()
 
                     image_docs.append(
                         Document(
@@ -198,7 +213,7 @@ class DocParser:
                                 "source": str(file_path),
                                 "filename": file_path.name,
                                 "document_id": file_document_id,
-                                "trace": trace
+                                "trace": trace,
                             },
                         )
                     )
@@ -207,10 +222,14 @@ class DocParser:
         for idx, d in enumerate(blocks):
             category = d.meta.get("category")
             if category == "Table":
-                table_doc = self.process_table_block(blocks, idx, file_path, file_document_id)
+                table_doc = self.process_table_block(
+                    blocks, idx, file_path, file_document_id
+                )
                 table_docs.append(table_doc)
             elif category == "Image" and "text_as_html" in d.meta:
-                table_doc = self.process_table_block(blocks, idx, file_path, file_document_id, is_in_image=True)
+                table_doc = self.process_table_block(
+                    blocks, idx, file_path, file_document_id, is_in_image=True
+                )
                 table_docs.append(table_doc)
         # 4) Gộp tất cả kết quả và thống kê
         final_docs = []
@@ -227,11 +246,15 @@ class DocParser:
     def run(self, folder_path: Path) -> List[Document]:
         all_docs = []
         # Lọc chỉ lấy file, bỏ qua thư mục con hoặc file ẩn như .DS_Store
-        files = [f for f in folder_path.iterdir() if f.is_file() and not f.name.startswith('.')]
+        files = [
+            f
+            for f in folder_path.iterdir()
+            if f.is_file() and not f.name.startswith(".")
+        ]
         files.sort()
         for file_path in files:
             try:
-                print(f"Parsing file: {file_path.name}")#For debug
+                print(f"Parsing file: {file_path.name}")  # For debug
                 docs = self.parse_file(file_path)
                 all_docs.extend(docs)
             except Exception as e:
@@ -239,14 +262,14 @@ class DocParser:
         return all_docs
 
 
-
 if __name__ == "__main__":
     import config as cf
+
     parser = DocParser()
     file_path = cf.DATA_PATH / "Đô Thị Hóa.docx"
     all_docs = parser.parse_file(file_path)
     for idx, doc in enumerate(all_docs):
-        print(20*"===")
+        print(20 * "===")
         print(f"{idx}. filename= {doc.meta['filename']}")
         print(f"content: {doc.content}")
         print(f"Page number: {doc.meta['trace']}")

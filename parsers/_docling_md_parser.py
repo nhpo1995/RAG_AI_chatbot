@@ -12,6 +12,7 @@ from haystack import Document
 from docling.document_converter import DocumentConverter
 from docling_core.types.doc import TextItem, SectionHeaderItem, TableItem, PictureItem
 
+
 # =========================
 # MD PARSER (Docling)
 # =========================
@@ -38,7 +39,9 @@ class MdParser:
         self.converter = DocumentConverter()
 
     # --- helpers trong class ---
-    _SENT_SPLIT = re.compile(r"(?<=[\.!?])\s+(?=[A-ZÀ-Ỵ])|(?<=[\.!\?])\s+(?=\d+)|\n{2,}")
+    _SENT_SPLIT = re.compile(
+        r"(?<=[\.!?])\s+(?=[A-ZÀ-Ỵ])|(?<=[\.!\?])\s+(?=\d+)|\n{2,}"
+    )
 
     @staticmethod
     def _normalize_text(t: str) -> str:
@@ -81,10 +84,15 @@ class MdParser:
 
     def _context(self, key: str, buffers: Dict[str, List[str]]) -> str:
         buf = buffers.get(key, [])
-        return " ".join(buf[-self.context_sentences:]).strip()
+        return " ".join(buf[-self.context_sentences :]).strip()
 
-    def _push_text(self, key: str, raw_text: str,
-                   texts: Dict[str, List[str]], buffers: Dict[str, List[str]]) -> None:
+    def _push_text(
+        self,
+        key: str,
+        raw_text: str,
+        texts: Dict[str, List[str]],
+        buffers: Dict[str, List[str]],
+    ) -> None:
         text = self._normalize_text(str(raw_text) or "")
         if not text:
             return
@@ -93,7 +101,7 @@ class MdParser:
             if s:
                 buffers.setdefault(key, []).append(s)
         if len(buffers.get(key, [])) > self.buffer_max_sentences:
-            buffers[key] = buffers[key][-self.buffer_max_sentences:]
+            buffers[key] = buffers[key][-self.buffer_max_sentences :]
 
     @staticmethod
     def _export_table(el, d) -> tuple[str, str]:
@@ -139,25 +147,31 @@ class MdParser:
                     self._push_text(key, text.strip(), section_texts, section_buffers)
                 continue
 
-            key = self._heading_path(heading_stack) if found_any_heading else fallback_key
+            key = (
+                self._heading_path(heading_stack) if found_any_heading else fallback_key
+            )
 
             if isinstance(el, TextItem) and getattr(el, "text", None):
-                self._push_text(key, getattr(el, "text", "") or "", section_texts, section_buffers)
+                self._push_text(
+                    key, getattr(el, "text", "") or "", section_texts, section_buffers
+                )
                 if not found_any_heading:
                     fallback_para_count += 1
                     if fallback_para_count >= self.fallback_n_paragraphs:
                         full_text = "\n\n".join(section_texts[key]).strip()
                         if full_text:
-                            docs.append(Document(
-                                content=full_text,
-                                meta={
-                                    "category": "text",
-                                    "source": source,
-                                    "filename": filename,
-                                    "document_id": document_id,
-                                    "trace": f"Mục {key} · Nhóm {fallback_bucket_idx}",
-                                },
-                            ))
+                            docs.append(
+                                Document(
+                                    content=full_text,
+                                    meta={
+                                        "category": "text",
+                                        "source": source,
+                                        "filename": filename,
+                                        "document_id": document_id,
+                                        "trace": f"Mục {key} · Nhóm {fallback_bucket_idx}",
+                                    },
+                                )
+                            )
                         section_texts[key].clear()
                         section_buffers[key].clear()
                         fallback_para_count = 0
@@ -168,17 +182,19 @@ class MdParser:
                 ctx = self._context(key, section_buffers)
                 md, html = self._export_table(el, d)
                 content = (ctx + "\n\n" if ctx else "") + (md or "")
-                docs.append(Document(
-                    content=content,
-                    meta={
-                        "category": "table",
-                        "source": source,
-                        "filename": filename,
-                        "document_id": document_id,
-                        "trace": f"Mục {key}",
-                        "table_html": html or "",
-                    },
-                ))
+                docs.append(
+                    Document(
+                        content=content,
+                        meta={
+                            "category": "table",
+                            "source": source,
+                            "filename": filename,
+                            "document_id": document_id,
+                            "trace": f"Mục {key}",
+                            "table_html": html or "",
+                        },
+                    )
+                )
                 continue
 
             if isinstance(el, PictureItem):
@@ -198,17 +214,19 @@ class MdParser:
                     continue
                 img_counter = next_idx
                 ctx = self._context(key, section_buffers)
-                docs.append(Document(
-                    content=ctx,
-                    meta={
-                        "category": "image",
-                        "source": source,
-                        "filename": filename,
-                        "document_id": document_id,
-                        "trace": f"Mục {key}",
-                        "filepath": str(img_path.resolve()),
-                    },
-                ))
+                docs.append(
+                    Document(
+                        content=ctx,
+                        meta={
+                            "category": "image",
+                            "source": source,
+                            "filename": filename,
+                            "document_id": document_id,
+                            "trace": f"Mục {key}",
+                            "filepath": str(img_path.resolve()),
+                        },
+                    )
+                )
                 continue
 
         if found_any_heading:
@@ -216,35 +234,41 @@ class MdParser:
                 full_text = "\n\n".join(section_texts[key]).strip()
                 if not full_text:
                     continue
-                docs.append(Document(
-                    content=full_text,
-                    meta={
-                        "category": "text",
-                        "source": source,
-                        "filename": filename,
-                        "document_id": document_id,
-                        "trace": f"Mục {key}",
-                    },
-                ))
-        else:
-            if section_texts[fallback_key]:
-                full_text = "\n\n".join(section_texts[fallback_key]).strip()
-                if full_text:
-                    docs.append(Document(
+                docs.append(
+                    Document(
                         content=full_text,
                         meta={
                             "category": "text",
                             "source": source,
                             "filename": filename,
                             "document_id": document_id,
-                            "trace": f"Mục {fallback_key} · Nhóm {fallback_bucket_idx}",
+                            "trace": f"Mục {key}",
                         },
-                    ))
+                    )
+                )
+        else:
+            if section_texts[fallback_key]:
+                full_text = "\n\n".join(section_texts[fallback_key]).strip()
+                if full_text:
+                    docs.append(
+                        Document(
+                            content=full_text,
+                            meta={
+                                "category": "text",
+                                "source": source,
+                                "filename": filename,
+                                "document_id": document_id,
+                                "trace": f"Mục {fallback_key} · Nhóm {fallback_bucket_idx}",
+                            },
+                        )
+                    )
 
         return docs
 
+
 if __name__ == "__main__":
     import config as cf
+
     file_path = cf.DATA_PATH / "tieu-thu-dien-nang.md"
     parser = MdParser(images_root=cf.IMAGES_PATH)
     docs = parser.parse(str(file_path))

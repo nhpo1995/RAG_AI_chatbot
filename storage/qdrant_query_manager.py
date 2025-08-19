@@ -12,6 +12,7 @@ from processing.embedder import get_text_embedder
 setup_colored_logger()
 logger = logging.getLogger(__name__)
 
+
 class QdrantQueryManager:
     """
     Class quản lý việc truy vấn dữ liệu từ Qdrant.
@@ -38,12 +39,17 @@ class QdrantQueryManager:
             return_embedding=False,
             scale_score=True,
             score_threshold=score_threshold,
-            filters=filters
+            filters=filters,
         )
 
-    def semantic_search(self, query: str, top_k: int = 5, filters: Optional[Union[Dict[str, Any], Filter]] = None) -> List[Document]:
+    def semantic_search(
+        self,
+        query: str,
+        top_k: int = 5,
+        filters: Optional[Union[Dict[str, Any], Filter]] = None,
+    ) -> List[Document]:
         """
-            Tìm kiếm semantic dựa trên query text filter metadata (nếu có).
+        Tìm kiếm semantic dựa trên query text filter metadata (nếu có).
         """
         if not query:
             return []
@@ -52,50 +58,7 @@ class QdrantQueryManager:
         retriever = self.get_retriever(top_k=top_k, filters=filters)
         result = retriever.run(query_embedding=embedded_query)
         docs = result.get("documents", [])
-        logger.info(f"[SemanticSearch] Query='{query}' Filter={filters} → {len(docs)} kết quả")
-        return docs
-
-    def _build_filter(self, filters: Optional[Dict[str, Any]]) -> Optional[Filter]:
-        """
-        Xây dựng Qdrant Filter từ dict {key: value}.
-        """
-        if not filters:
-            return None
-        must_conditions = [
-            FieldCondition(key=key, match=MatchValue(value=value))
-            for key, value in filters.items()
-        ]
-        return Filter(must=must_conditions)
-
-    def metadata_search(
-            self,
-            filters: Dict[str, Any],
-            limit: int = 100,
-            offset: int = 0
-    ) -> List[Document]:
-        """
-        Lấy documents chỉ dựa trên filter metadata (không semantic search).
-        """
-        qdrant_filter = self._build_filter(filters)
-        scroll_resp = self.document_store._client.scroll(
-            collection_name=self.document_store.index,
-            scroll_filter=qdrant_filter,
-            limit=limit,
-            offset=offset
+        logger.info(
+            f"[SemanticSearch] Query='{query}' Filter={filters} → {len(docs)} kết quả"
         )
-        if not scroll_resp or not scroll_resp[0]:
-            logger.warning("[MetadataSearch] Không tìm thấy dữ liệu")
-            return []
-        docs = []
-        for d in scroll_resp[0]:
-            meta = {k: v for k, v in d.payload.items() if k != "content"}
-            doc = Document(
-                content = d.payload.get("content", ""),
-                meta = meta,
-            )
-            docs.append(doc)
-        logger.info(f"[MetadataSearch] Filter={filters} → {len(docs)} kết quả")
         return docs
-
-
-

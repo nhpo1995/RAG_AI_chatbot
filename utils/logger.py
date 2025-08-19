@@ -1,6 +1,7 @@
 import logging
 import colorlog
 
+
 def setup_colored_logger(level=logging.INFO):
     """
     Thiết lập logger với màu sắc tùy chỉnh.
@@ -10,14 +11,14 @@ def setup_colored_logger(level=logging.INFO):
     logger.setLevel(level)  # Giờ có thể chỉnh: logging.INFO, WARNING, etc.
 
     formatter = colorlog.ColoredFormatter(
-        '%(log_color)s%(levelname)-8s | %(message)s',
+        "%(log_color)s%(levelname)-8s | %(message)s",
         log_colors={
-            'DEBUG': 'cyan',
-            'INFO': 'green',
-            'WARNING': 'yellow',
-            'ERROR': 'red',
-            'CRITICAL': 'bold_red',
-        }
+            "DEBUG": "cyan",
+            "INFO": "green",
+            "WARNING": "yellow",
+            "ERROR": "red",
+            "CRITICAL": "bold_red",
+        },
     )
 
     handler = colorlog.StreamHandler()

@@ -11,13 +11,15 @@ import config
 setup_colored_logger()
 load_dotenv()
 
+
 class RAGAssistant:
     def __init__(self, model_name: str = config.LLM_MODEL, temperature: float = 0):
         self.llm = ChatOpenAI(model=model_name, temperature=temperature)
         self.prompt = self._build_prompt()
 
     def _build_prompt(self):
-        system_message = SystemMessagePromptTemplate.from_template("""
+        system_message = SystemMessagePromptTemplate.from_template(
+            """
 Bạn là một trợ lý ảo chuyên nghiệp. Trả lời câu hỏi dựa trên thông tin trong [CONTEXT] dưới đây.
 
 Hướng dẫn:
@@ -33,14 +35,17 @@ Hướng dẫn:
 
 [CONTEXT]
 {context}
-        """)
+        """
+        )
 
-        human_message = HumanMessagePromptTemplate.from_template("""
+        human_message = HumanMessagePromptTemplate.from_template(
+            """
 [CÂU HỎI]
 {question}
 
 Hãy trả lời như một người thật, tự nhiên và thân thiện.
-        """)
+        """
+        )
 
         return ChatPromptTemplate.from_messages([system_message, human_message])
 
@@ -48,6 +53,7 @@ Hãy trả lời như một người thật, tự nhiên và thân thiện.
         chain = self.prompt | self.llm
         result = chain.invoke({"context": context, "question": question})
         return result.content
+
 
 if __name__ == "__main__":
     agent = RAGAssistant()

@@ -29,11 +29,9 @@ class DocumentChunkerWrapper:
         chunk_size = 15
         table_chunks = []
         for i in range(0, len(rows), chunk_size):
-            chunk_rows = rows[i:i + chunk_size]
+            chunk_rows = rows[i : i + chunk_size]
             chunk_content = header + "\n" + "\n".join(chunk_rows)
-            table_chunks.append(
-                Document(content=chunk_content, meta=doc.meta.copy())
-            )
+            table_chunks.append(Document(content=chunk_content, meta=doc.meta.copy()))
         return table_chunks
 
     def run(self, documents: List[Document]) -> List[Document]:

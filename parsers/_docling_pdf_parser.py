@@ -43,28 +43,34 @@ class PdfParser:
     # -------------------------
     # Helpers (giảm trùng lặp – KHÔNG có _meta)
     # -------------------------
-    _SENT_SPLIT = re.compile(r"(?<=[\.!?])\s+(?=[A-ZÀ-Ỵ])|(?<=[\.!\?])\s+(?=\d+)|\n{2,}")
+    _SENT_SPLIT = re.compile(
+        r"(?<=[\.!?])\s+(?=[A-ZÀ-Ỵ])|(?<=[\.!\?])\s+(?=\d+)|\n{2,}"
+    )
 
     @staticmethod
     def _split_sentences(text: str) -> List[str]:
-        sents = [s.strip() for s in PdfParser._SENT_SPLIT.split(text or "") if s.strip()]
+        sents = [
+            s.strip() for s in PdfParser._SENT_SPLIT.split(text or "") if s.strip()
+        ]
         return sents or [ln.strip() for ln in (text or "").splitlines() if ln.strip()]
 
     @staticmethod
     def _normalize_text(t: str) -> str:
         if not t:
             return ""
-        t = re.sub(r"-\s*\n", "", t)          # gỡ ngắt dòng có gạch nối
-        t = t.replace("\u00ad", "")           # bỏ soft-hyphen
-        t = re.sub(r"\s*\n\s*", " ", t)       # gom dòng
-        t = re.sub(r"\s{2,}", " ", t)         # bóp khoảng trắng
+        t = re.sub(r"-\s*\n", "", t)  # gỡ ngắt dòng có gạch nối
+        t = t.replace("\u00ad", "")  # bỏ soft-hyphen
+        t = re.sub(r"\s*\n\s*", " ", t)  # gom dòng
+        t = re.sub(r"\s{2,}", " ", t)  # bóp khoảng trắng
         return t.strip()
 
     def _make_converter(self) -> DocumentConverter:
         pdf_opts = PdfPipelineOptions()
         pdf_opts.images_scale = self.image_scale
         pdf_opts.generate_picture_images = True  # PictureItem.get_image(...)
-        return DocumentConverter(format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pdf_opts)})
+        return DocumentConverter(
+            format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pdf_opts)}
+        )
 
     @staticmethod
     def _file_document_id(path: Path) -> str:
@@ -98,7 +104,7 @@ class PdfParser:
 
     def _context(self, page_no: int, page_buffers: Dict[int, List[str]]) -> str:
         buf = page_buffers.get(page_no, [])
-        return " ".join(buf[-self.context_sentences:]).strip()
+        return " ".join(buf[-self.context_sentences :]).strip()
 
     @staticmethod
     def _export_table(el, doc) -> tuple[str, str]:
@@ -110,7 +116,9 @@ class PdfParser:
         return md, html
 
     @staticmethod
-    def _save_picture(el, doc, page_no: int, images_dir: Path, picture_counters: Dict[int, int]) -> Optional[str]:
+    def _save_picture(
+        el, doc, page_no: int, images_dir: Path, picture_counters: Dict[int, int]
+    ) -> Optional[str]:
         try:
             pil = el.get_image(doc)  # PIL.Image
             if pil is None:
@@ -128,8 +136,13 @@ class PdfParser:
         except Exception:
             return None
 
-    def _push_text(self, page_no: int, raw_text: str,
-                   page_texts: Dict[int, List[str]], page_buffers: Dict[int, List[str]]) -> None:
+    def _push_text(
+        self,
+        page_no: int,
+        raw_text: str,
+        page_texts: Dict[int, List[str]],
+        page_buffers: Dict[int, List[str]],
+    ) -> None:
         text = self._normalize_text(str(raw_text) or "")
         if not text:
             return
@@ -138,7 +151,7 @@ class PdfParser:
             if s:
                 page_buffers.setdefault(page_no, []).append(s)
         if len(page_buffers.get(page_no, [])) > self.buffer_max_sentences:
-            page_buffers[page_no] = page_buffers[page_no][-self.buffer_max_sentences:]
+            page_buffers[page_no] = page_buffers[page_no][-self.buffer_max_sentences :]
 
     # -------------------------
     # Public API
@@ -174,43 +187,53 @@ class PdfParser:
             current_page = page_no
 
             # TEXT
-            if isinstance(el, (TextItem, SectionHeaderItem)) or getattr(el, "text", None):
-                self._push_text(page_no, getattr(el, "text", "") or "", page_texts, page_buffers)
+            if isinstance(el, (TextItem, SectionHeaderItem)) or getattr(
+                el, "text", None
+            ):
+                self._push_text(
+                    page_no, getattr(el, "text", "") or "", page_texts, page_buffers
+                )
 
             # TABLE
             elif isinstance(el, TableItem):
                 ctx = self._context(page_no, page_buffers)
                 md, html = self._export_table(el, d)
                 content = (ctx + "\n\n" if ctx else "") + (md or "")
-                docs.append(Document(
-                    content=content,
-                    meta={
-                        "category": "table",
-                        "source": source,
-                        "filename": filename,
-                        "document_id": document_id,
-                        "trace": f"Trang {page_no}",
-                        "table_html": html or "",
-                    },
-                ))
+                docs.append(
+                    Document(
+                        content=content,
+                        meta={
+                            "category": "table",
+                            "source": source,
+                            "filename": filename,
+                            "document_id": document_id,
+                            "trace": f"Trang {page_no}",
+                            "table_html": html or "",
+                        },
+                    )
+                )
 
             # IMAGE
             elif isinstance(el, PictureItem):
-                filepath = self._save_picture(el, d, page_no, images_dir, picture_counters)
+                filepath = self._save_picture(
+                    el, d, page_no, images_dir, picture_counters
+                )
                 if not filepath:
                     continue
                 ctx = self._context(page_no, page_buffers)
-                docs.append(Document(
-                    content=ctx,
-                    meta={
-                        "category": "image",
-                        "source": source,
-                        "filename": filename,
-                        "document_id": document_id,
-                        "trace": f"Trang {page_no}",
-                        "filepath": filepath,
-                    },
-                ))
+                docs.append(
+                    Document(
+                        content=ctx,
+                        meta={
+                            "category": "image",
+                            "source": source,
+                            "filename": filename,
+                            "document_id": document_id,
+                            "trace": f"Trang {page_no}",
+                            "filepath": filepath,
+                        },
+                    )
+                )
 
             # các loại phần tử khác: bỏ qua
 
@@ -219,16 +242,18 @@ class PdfParser:
             full_page_text = "\n\n".join(page_texts[page_no]).strip()
             if not full_page_text:
                 continue
-            docs.append(Document(
-                content=full_page_text,
-                meta={
-                    "category": "text",
-                    "source": source,
-                    "filename": filename,
-                    "document_id": document_id,
-                    "trace": f"Trang {page_no}",
-                },
-            ))
+            docs.append(
+                Document(
+                    content=full_page_text,
+                    meta={
+                        "category": "text",
+                        "source": source,
+                        "filename": filename,
+                        "document_id": document_id,
+                        "trace": f"Trang {page_no}",
+                    },
+                )
+            )
 
         return docs
 
@@ -236,6 +261,7 @@ class PdfParser:
 # --- ví dụ dùng với config (không sys.argv) ---
 if __name__ == "__main__":
     import config as cf
+
     file_path = cf.DATA_PATH / "Market_Insights_AI_Report-2025.pdf"
     parser = PdfParser(images_root=str(cf.IMAGES_PATH))
     docs = parser.parse(str(file_path))

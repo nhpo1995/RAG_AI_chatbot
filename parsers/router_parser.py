@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import List
 import sys
+
 # Add parent directory to path để có thể import parsers package
 sys.path.append(str(Path(__file__).parent.parent))
 
@@ -9,6 +10,7 @@ from parsers._docling_docx_parser import DocxParser
 from parsers._docling_pdf_parser import PdfParser
 from parsers._docling_md_parser import MdParser
 from parsers._docling_txt_parser import TxtParser
+
 
 class RouterParser:
     """
@@ -60,20 +62,21 @@ class RouterParser:
         return result_list
 
 
-
 # ----------------- Test nhanh -----------------
 if __name__ == "__main__":
     import sys
     from pathlib import Path
+
     # Add parent directory to path để có thể import config
     sys.path.append(str(Path(__file__).parent.parent))
     import config as cf
+
     router = RouterParser(images_root=cf.IMAGES_PATH)
 
     # Test từng file
     file_paths = [
         cf.DATA_PATH / "Đô Thị Hóa.docx",
-        cf.DATA_PATH / "Tác động của Biến đổi Khí hậu đến Nông nghiệp Việt Nam.pdf"
+        cf.DATA_PATH / "Tác động của Biến đổi Khí hậu đến Nông nghiệp Việt Nam.pdf",
     ]
 
     folder_path = cf.DATA_PATH
@@ -88,6 +91,3 @@ if __name__ == "__main__":
         print(f"content preview: {doc.content}")
         if doc.meta["category"] == "image":
             print(f"image path: {doc.meta.get('file_path')}")
-
-
-

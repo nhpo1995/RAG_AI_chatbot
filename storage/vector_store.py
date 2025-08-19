@@ -9,9 +9,7 @@ def get_document_store(recreate_index=False) -> QdrantDocumentStore:
     """
     quantization_config_object = models.ScalarQuantization(
         scalar=models.ScalarQuantizationConfig(
-            type=models.ScalarType.INT8,
-            quantile=1.0,
-            always_ram=True
+            type=models.ScalarType.INT8, quantile=1.0, always_ram=True
         )
     )
 
@@ -22,7 +20,7 @@ def get_document_store(recreate_index=False) -> QdrantDocumentStore:
         similarity="cosine",
         recreate_index=recreate_index,
         hnsw_config={"m": 16, "ef_construct": 64},
-        quantization_config=quantization_config_object, # type: ignore
+        quantization_config=quantization_config_object,  # type: ignore
         on_disk_payload=True,
         write_batch_size=128,
         payload_fields_to_index=[

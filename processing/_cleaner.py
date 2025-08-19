@@ -8,6 +8,7 @@ class DocumentCleanerWrapper:
     Wrapper cho DocumentCleaner của Haystack.
     Giữ nguyên bảng (category='table'), chỉ làm sạch các loại tài liệu khác.
     """
+
     def __init__(self, cleaner: Optional[DocumentCleaner] = None):
         if cleaner is None:
             self.cleaner = DocumentCleaner(

@@ -41,21 +41,25 @@ class DocxParser:
     # -------------------------
     # Helpers (đưa vào class theo yêu cầu)
     # -------------------------
-    _SENT_SPLIT = re.compile(r"(?<=[\.!?])\s+(?=[A-ZÀ-Ỵ])|(?<=[\.!\?])\s+(?=\d+)|\n{2,}")
+    _SENT_SPLIT = re.compile(
+        r"(?<=[\.!?])\s+(?=[A-ZÀ-Ỵ])|(?<=[\.!\?])\s+(?=\d+)|\n{2,}"
+    )
 
     @staticmethod
     def _split_sentences(text: str) -> List[str]:
-        sents = [s.strip() for s in DocxParser._SENT_SPLIT.split(text or "") if s.strip()]
+        sents = [
+            s.strip() for s in DocxParser._SENT_SPLIT.split(text or "") if s.strip()
+        ]
         return sents or [ln.strip() for ln in (text or "").splitlines() if ln.strip()]
 
     @staticmethod
     def _normalize_text(t: str) -> str:
         if not t:
             return ""
-        t = re.sub(r"-\s*\n", "", t)     # gỡ ngắt dòng có gạch nối
-        t = t.replace("\u00ad", "")      # bỏ soft-hyphen
+        t = re.sub(r"-\s*\n", "", t)  # gỡ ngắt dòng có gạch nối
+        t = t.replace("\u00ad", "")  # bỏ soft-hyphen
         t = re.sub(r"\s*\n\s*", " ", t)  # gom dòng
-        t = re.sub(r"\s{2,}", " ", t)    # bóp khoảng trắng
+        t = re.sub(r"\s{2,}", " ", t)  # bóp khoảng trắng
         return t.strip()
 
     @staticmethod
@@ -86,10 +90,15 @@ class DocxParser:
     # ---- context & text accumulation ----
     def _context(self, key: str, buffers: Dict[str, List[str]]) -> str:
         buf = buffers.get(key, [])
-        return " ".join(buf[-self.context_sentences:]).strip()
+        return " ".join(buf[-self.context_sentences :]).strip()
 
-    def _push_text(self, key: str, raw_text: str,
-                   texts: Dict[str, List[str]], buffers: Dict[str, List[str]]) -> None:
+    def _push_text(
+        self,
+        key: str,
+        raw_text: str,
+        texts: Dict[str, List[str]],
+        buffers: Dict[str, List[str]],
+    ) -> None:
         text = self._normalize_text(str(raw_text) or "")
         if not text:
             return
@@ -98,7 +107,7 @@ class DocxParser:
             if s:
                 buffers.setdefault(key, []).append(s)
         if len(buffers.get(key, [])) > self.buffer_max_sentences:
-            buffers[key] = buffers[key][-self.buffer_max_sentences:]
+            buffers[key] = buffers[key][-self.buffer_max_sentences :]
 
     # ---- table & image helpers ----
     @staticmethod
@@ -127,7 +136,7 @@ class DocxParser:
 
         # State
         heading_stack: List[Tuple[int, str]] = []
-        section_texts: Dict[str, List[str]] = defaultdict(list)    # key = heading_path
+        section_texts: Dict[str, List[str]] = defaultdict(list)  # key = heading_path
         section_buffers: Dict[str, List[str]] = defaultdict(list)  # key = heading_path
         docs: List[Document] = []
         img_counter = 0
@@ -151,26 +160,32 @@ class DocxParser:
                 continue
 
             # Determine current key
-            key = self._heading_path(heading_stack) if found_any_heading else fallback_key
+            key = (
+                self._heading_path(heading_stack) if found_any_heading else fallback_key
+            )
 
             # Text
             if isinstance(el, TextItem) and getattr(el, "text", None):
-                self._push_text(key, getattr(el, "text", "") or "", section_texts, section_buffers)
+                self._push_text(
+                    key, getattr(el, "text", "") or "", section_texts, section_buffers
+                )
                 if not found_any_heading:
                     fallback_para_count += 1
                     if fallback_para_count >= self.fallback_n_paragraphs:
                         full_text = "\n\n".join(section_texts[key]).strip()
                         if full_text:
-                            docs.append(Document(
-                                content=full_text,
-                                meta={
-                                    "category": "text",
-                                    "source": source,
-                                    "filename": filename,
-                                    "document_id": document_id,
-                                    "trace": f"Mục {key} · Nhóm {fallback_bucket_idx}",
-                                },
-                            ))
+                            docs.append(
+                                Document(
+                                    content=full_text,
+                                    meta={
+                                        "category": "text",
+                                        "source": source,
+                                        "filename": filename,
+                                        "document_id": document_id,
+                                        "trace": f"Mục {key} · Nhóm {fallback_bucket_idx}",
+                                    },
+                                )
+                            )
                         section_texts[key].clear()
                         section_buffers[key].clear()
                         fallback_para_count = 0
@@ -182,17 +197,19 @@ class DocxParser:
                 ctx = self._context(key, section_buffers)
                 md, html = self._export_table(el, d)
                 content = (ctx + "\n\n" if ctx else "") + (md or "")
-                docs.append(Document(
-                    content=content,
-                    meta={
-                        "category": "table",
-                        "source": source,
-                        "filename": filename,
-                        "document_id": document_id,
-                        "trace": f"Mục {key}",
-                        "table_html": html or "",
-                    },
-                ))
+                docs.append(
+                    Document(
+                        content=content,
+                        meta={
+                            "category": "table",
+                            "source": source,
+                            "filename": filename,
+                            "document_id": document_id,
+                            "trace": f"Mục {key}",
+                            "table_html": html or "",
+                        },
+                    )
+                )
                 continue
 
             # Image
@@ -215,17 +232,19 @@ class DocxParser:
                     continue
                 img_counter = next_idx  # cập nhật sau khi save thành công
                 ctx = self._context(key, section_buffers)
-                docs.append(Document(
-                    content=ctx,
-                    meta={
-                        "category": "image",
-                        "source": source,
-                        "filename": filename,
-                        "document_id": document_id,
-                        "trace": f"Mục {key}",
-                        "filepath": str(img_path.resolve()),
-                    },
-                ))
+                docs.append(
+                    Document(
+                        content=ctx,
+                        meta={
+                            "category": "image",
+                            "source": source,
+                            "filename": filename,
+                            "document_id": document_id,
+                            "trace": f"Mục {key}",
+                            "filepath": str(img_path.resolve()),
+                        },
+                    )
+                )
                 continue
 
         # Emit remaining text
@@ -234,35 +253,41 @@ class DocxParser:
                 full_text = "\n\n".join(section_texts[key]).strip()
                 if not full_text:
                     continue
-                docs.append(Document(
-                    content=full_text,
-                    meta={
-                        "category": "text",
-                        "source": source,
-                        "filename": filename,
-                        "document_id": document_id,
-                        "trace": f"Mục {key}",
-                    },
-                ))
-        else:
-            if section_texts[fallback_key]:
-                full_text = "\n\n".join(section_texts[fallback_key]).strip()
-                if full_text:
-                    docs.append(Document(
+                docs.append(
+                    Document(
                         content=full_text,
                         meta={
                             "category": "text",
                             "source": source,
                             "filename": filename,
                             "document_id": document_id,
-                            "trace": f"Mục {fallback_key} · Nhóm {fallback_bucket_idx}",
+                            "trace": f"Mục {key}",
                         },
-                    ))
+                    )
+                )
+        else:
+            if section_texts[fallback_key]:
+                full_text = "\n\n".join(section_texts[fallback_key]).strip()
+                if full_text:
+                    docs.append(
+                        Document(
+                            content=full_text,
+                            meta={
+                                "category": "text",
+                                "source": source,
+                                "filename": filename,
+                                "document_id": document_id,
+                                "trace": f"Mục {fallback_key} · Nhóm {fallback_bucket_idx}",
+                            },
+                        )
+                    )
 
         return docs
 
+
 if __name__ == "__main__":
     import config as cf
+
     file_path = cf.DATA_PATH / "Đô Thị Hóa.docx"
     parser = DocxParser(images_root=str(cf.IMAGES_PATH))
     docs = parser.parse(str(file_path))

@@ -1,6 +1,6 @@
 from agent.rag_agent import RAGAssistant
 from storage.qdrant_query_manager import QdrantQueryManager
-from typing import List
+from typing import List, Optional
 from haystack import Document
 import logging
 from utils.logger import setup_colored_logger
@@ -8,8 +8,9 @@ from utils.logger import setup_colored_logger
 setup_colored_logger()
 logger = logging.getLogger(__file__)
 
+
 class RAGService:
-    def __init__(self, rag_agent: RAGAssistant = None):
+    def __init__(self, rag_agent: Optional[RAGAssistant] = None):
         self.rag_agent = rag_agent or RAGAssistant()
         self.query_manager = QdrantQueryManager()
 
@@ -45,5 +46,3 @@ if __name__ == "__main__":
     user_message = "Bui minh Hieu la ai"
     ai_answer = rag_service.semantic_query(query=user_message, top_k=5)
     print(ai_answer)
-
-

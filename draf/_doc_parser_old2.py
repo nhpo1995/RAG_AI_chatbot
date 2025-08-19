@@ -5,7 +5,9 @@ from pathlib import Path
 from typing import List, Dict, Optional, Set, Any
 from bs4 import BeautifulSoup
 from haystack import Document
-from haystack_integrations.components.converters.unstructured import UnstructuredFileConverter
+from haystack_integrations.components.converters.unstructured import (
+    UnstructuredFileConverter,
+)
 from docx import Document as DocxDocument
 from config import API_URL_UNSTRUCTURED, IMAGES_PATH, DATA_PATH
 
@@ -20,12 +22,13 @@ class DocParser:
     - Table giữ nguyên Markdown
     - Image được trích xuất từ Word, content = đoạn text ngay trước hình ảnh
     """
+
     def __init__(
-            self,
-            api_url: str = API_URL_UNSTRUCTURED,
-            images_root: Path = IMAGES_PATH,
-            text_categories: Set[str] = None,
-            unstructured_kwargs: Optional[Dict[str, Any]] = None,
+        self,
+        api_url: str = API_URL_UNSTRUCTURED,
+        images_root: Path = IMAGES_PATH,
+        text_categories: Set[str] = None,
+        unstructured_kwargs: Optional[Dict[str, Any]] = None,
     ):
         self.api_url = api_url
         self.images_root = images_root
@@ -46,7 +49,7 @@ class DocParser:
             document_creation_mode="one-doc-per-element",
             separator="\n\n",
             progress_bar=False,
-            unstructured_kwargs=self.unstructured_kwargs
+            unstructured_kwargs=self.unstructured_kwargs,
         )
 
     # ---------------- commons ----------------
@@ -84,7 +87,9 @@ class DocParser:
             return soup.get_text(separator=" ").strip()
         rows = []
         thead = table.find("thead")
-        headers = [th.get_text(strip=True) for th in thead.find_all("th")] if thead else []
+        headers = (
+            [th.get_text(strip=True) for th in thead.find_all("th")] if thead else []
+        )
         tbody = table.find("tbody")
         trs = tbody.find_all("tr") if tbody else table.find_all("tr")
         for i, tr in enumerate(trs):
@@ -102,17 +107,31 @@ class DocParser:
             md_lines.append("| " + " | ".join(r) + " |")
         return "\n".join(md_lines).strip()
 
-    def process_table_block(self, blocks: List[Document], idx: int, file_path: Path, file_document_id: str,
-                            is_in_image: bool = False) -> Document:
+    def process_table_block(
+        self,
+        blocks: List[Document],
+        idx: int,
+        file_path: Path,
+        file_document_id: str,
+        is_in_image: bool = False,
+    ) -> Document:
         d = blocks[idx]
-        md = self.html_table_to_markdown(d.meta["text_as_html"]) if "text_as_html" in d.meta else (d.content or "").strip()
+        md = (
+            self.html_table_to_markdown(d.meta["text_as_html"])
+            if "text_as_html" in d.meta
+            else (d.content or "").strip()
+        )
         prev_txt = self.nearest_text(blocks, idx, -1)
         if prev_txt:
             md = f"{prev_txt}\n\n{md}"
         sheet_name = d.meta.get("sheet_name")
         index = d.meta.get("element_index")
         page_num = d.meta.get("page_number")
-        trace = f"Table in sheet {sheet_name} with index {index}" if sheet_name else f"Table in page {page_num} with index {index}"
+        trace = (
+            f"Table in sheet {sheet_name} with index {index}"
+            if sheet_name
+            else f"Table in page {page_num} with index {index}"
+        )
         return Document(
             content=md,
             meta={
@@ -137,7 +156,9 @@ class DocParser:
             return False
 
     # ---------------- Word image extraction ----------------
-    def extract_images_from_docx(self, file_path: Path, file_document_id: str) -> List[Document]:
+    def extract_images_from_docx(
+        self, file_path: Path, file_document_id: str
+    ) -> List[Document]:
         doc = DocxDocument(file_path)
         file_stem = file_path.stem
         images_dir = self.images_root / file_stem
@@ -162,7 +183,7 @@ class DocParser:
                                 "filename": file_path.name,
                                 "document_id": file_document_id,
                                 "trace": f"Hình ảnh #{idx}",
-                            }
+                            },
                         )
                     )
         return image_docs
@@ -189,38 +210,48 @@ class DocParser:
         for page_number, page_texts in paged_texts.items():
             merged = "\n\n".join(page_texts)
             for chunk in self.chunk_text(merged):
-                text_docs.append(Document(
-                    content=chunk,
-                    meta={
-                        "category": "text",
-                        "source": str(file_path),
-                        "filename": file_path.name,
-                        "document_id": file_document_id,
-                        "trace": f"Trang {page_number}",
-                    }
-                ))
+                text_docs.append(
+                    Document(
+                        content=chunk,
+                        meta={
+                            "category": "text",
+                            "source": str(file_path),
+                            "filename": file_path.name,
+                            "document_id": file_document_id,
+                            "trace": f"Trang {page_number}",
+                        },
+                    )
+                )
         if unpaged_texts:
             merged = "\n\n".join(unpaged_texts)
             for chunk in self.chunk_text(merged):
-                text_docs.append(Document(
-                    content=chunk,
-                    meta={
-                        "category": "text",
-                        "source": str(file_path),
-                        "filename": file_path.name,
-                        "document_id": file_document_id,
-                        "trace": "Nội dung văn bản",
-                    }
-                ))
+                text_docs.append(
+                    Document(
+                        content=chunk,
+                        meta={
+                            "category": "text",
+                            "source": str(file_path),
+                            "filename": file_path.name,
+                            "document_id": file_document_id,
+                            "trace": "Nội dung văn bản",
+                        },
+                    )
+                )
 
         # --- Tables ---
         table_docs = []
         for idx, d in enumerate(blocks):
             category = d.meta.get("category")
             if category == "Table":
-                table_docs.append(self.process_table_block(blocks, idx, file_path, file_document_id))
+                table_docs.append(
+                    self.process_table_block(blocks, idx, file_path, file_document_id)
+                )
             elif category == "Image" and "text_as_html" in d.meta:
-                table_docs.append(self.process_table_block(blocks, idx, file_path, file_document_id, is_in_image=True))
+                table_docs.append(
+                    self.process_table_block(
+                        blocks, idx, file_path, file_document_id, is_in_image=True
+                    )
+                )
 
         # --- Images (Word only) ---
         image_docs = []
@@ -237,7 +268,11 @@ class DocParser:
 
     def run(self, folder_path: Path) -> List[Document]:
         all_docs = []
-        files = [f for f in folder_path.iterdir() if f.is_file() and not f.name.startswith('.')]
+        files = [
+            f
+            for f in folder_path.iterdir()
+            if f.is_file() and not f.name.startswith(".")
+        ]
         files.sort()
         for file_path in files:
             try:
