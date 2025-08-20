@@ -11,3 +11,4 @@ wheels/
 .env
 data/
 data_source/
+.vscode
