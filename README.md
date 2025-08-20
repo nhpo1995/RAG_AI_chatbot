@@ -61,6 +61,25 @@ source .venv/bin/activate
 uv sync
 ```
 
+#### Sử dụng pip
+```bash
+    # Tạo virtual environment với Python 3.11
+python -m venv .venv
+
+# Kích hoạt virtual environment
+# Windows:
+.venv\Scripts\activate
+# Linux/macOS:
+source .venv/bin/activate
+
+# Nâng cấp pip
+python -m pip install --upgrade pip
+
+# Cài đặt dự án và dependencies
+pip install -r requirements.txt
+ 
+```
+
 ### Bước 3: Thiết lập biến môi trường
 
 Tạo file `.env` trong thư mục gốc của dự án:
