@@ -40,9 +40,7 @@ class PdfParser:
         self.image_scale = float(image_scale)
         self.converter = self._make_converter()
 
-    # -------------------------
-    # Helpers (giảm trùng lặp – KHÔNG có _meta)
-    # -------------------------
+    # Helpers (giảm trùng lặp)
     _SENT_SPLIT = re.compile(
         r"(?<=[\.!?])\s+(?=[A-ZÀ-Ỵ])|(?<=[\.!\?])\s+(?=\d+)|\n{2,}"
     )
@@ -58,10 +56,10 @@ class PdfParser:
     def _normalize_text(t: str) -> str:
         if not t:
             return ""
-        t = re.sub(r"-\s*\n", "", t)  # gỡ ngắt dòng có gạch nối
-        t = t.replace("\u00ad", "")  # bỏ soft-hyphen
-        t = re.sub(r"\s*\n\s*", " ", t)  # gom dòng
-        t = re.sub(r"\s{2,}", " ", t)  # bóp khoảng trắng
+        t = re.sub(r"-\s*\n", "", t)
+        t = t.replace("\u00ad", "")
+        t = re.sub(r"\s*\n\s*", " ", t)
+        t = re.sub(r"\s{2,}", " ", t)
         return t.strip()
 
     def _make_converter(self) -> DocumentConverter:
@@ -84,7 +82,6 @@ class PdfParser:
         Best-effort lấy số trang cho element Docling.
         - el.prov thường là LIST các ProvenanceItem => dùng prov[0].page_no
         - Nếu không có, fallback về current_page
-        - Chuẩn hoá về 1-based nếu trả 0-based
         """
         prov = getattr(el, "prov", None)
         page: Optional[int] = None
@@ -153,34 +150,28 @@ class PdfParser:
         if len(page_buffers.get(page_no, [])) > self.buffer_max_sentences:
             page_buffers[page_no] = page_buffers[page_no][-self.buffer_max_sentences :]
 
-    # -------------------------
     # Public API
-    # -------------------------
     def parse(self, pdf_path: str | Path) -> List[Document]:
         """
         Đọc PDF sạch và trả về danh sách haystack.Document:
-          - category="text"  : nội dung cả trang (đã gom)
-          - category="table" : context trước + Markdown; meta.table_html giữ HTML gốc
-          - category="image" : context trước; meta.filepath trỏ tới ảnh đã lưu
+            - category="text"  : nội dung cả trang (đã gom)
+            - category="table" : context trước + Markdown; meta.table_html giữ HTML gốc
+            - category="image" : context trước; meta.filepath trỏ tới ảnh đã lưu
         """
         pdf_path = Path(pdf_path)
         source = str(pdf_path.resolve())
         filename = pdf_path.name
         fname_wo = pdf_path.stem
         document_id = self._file_document_id(pdf_path)
-
         images_dir = self.images_root / fname_wo
-
         conv_res = self.converter.convert(pdf_path)
         d = conv_res.document
-
         # Trạng thái tích luỹ
         page_texts: Dict[int, List[str]] = defaultdict(list)
         page_buffers: Dict[int, List[str]] = defaultdict(list)
         picture_counters: Dict[int, int] = defaultdict(int)
         docs: List[Document] = []
         current_page: Optional[int] = None
-
         # Duyệt theo reading order
         for el, _lvl in d.iterate_items():
             page_no = self._resolve_page_no(el, current_page)
@@ -221,21 +212,21 @@ class PdfParser:
                 if not filepath:
                     continue
                 ctx = self._context(page_no, page_buffers)
-                docs.append(
-                    Document(
-                        content=ctx,
-                        meta={
-                            "category": "image",
-                            "source": source,
-                            "filename": filename,
-                            "document_id": document_id,
-                            "trace": f"Trang {page_no}",
-                            "filepath": filepath,
-                        },
+                # Only create image document if there is meaningful content
+                if ctx and ctx.strip():
+                    docs.append(
+                        Document(
+                            content=ctx,
+                            meta={
+                                "category": "image",
+                                "source": source,
+                                "filename": filename,
+                                "document_id": document_id,
+                                "trace": f"Trang {page_no}",
+                                "filepath": filepath,
+                            },
+                        )
                     )
-                )
-
-            # các loại phần tử khác: bỏ qua
 
         # 1 Document "text" cho mỗi trang
         for page_no in sorted(page_texts.keys()):

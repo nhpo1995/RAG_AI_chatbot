@@ -58,7 +58,7 @@ class QdrantManager:
         for file_source, docs in docs_dict.items():
             logger.info(f"Đang update file: {file_source}")
             result = self.delete_file(file_source)
-            if result.status != "ok":
+            if result:
                 logger.warning(
                     f"file chưa tồn tại trong database, tiến hành thêm mới: {file_source}"
                 )
@@ -74,19 +74,35 @@ class QdrantManager:
         """
         Xóa tất cả chunks thuộc 1 file theo metadata 'source'.
         """
-        result = self.client.delete(
-            collection_name=self.store.index,
-            points_selector=models.FilterSelector(
-                filter=Filter(
-                    must=[
-                        FieldCondition(
-                            key="source", match=MatchValue(value=file_source)
-                        )
-                    ]
-                )
-            ),
-        )
-        return result
+        if not file_source:
+            raise ValueError("file_source không được để trống")
+        chunks = self.get_all_chunks(file_source, limit=1)
+        if not chunks:
+            logger.warning(f"Không tìm thấy chunks nào cho file: {file_source}")
+            return None  
+        total_chunks = len(self.get_all_chunks(file_source))
+        logger.info(f"Bắt đầu xóa {total_chunks} chunks cho file: {file_source}")
+        try:
+            result = self.client.delete(
+                collection_name=self.store.index,
+                points_selector=models.FilterSelector(
+                    filter=Filter(
+                        must=[
+                            FieldCondition(
+                                key="source", match=MatchValue(value=file_source)
+                            )
+                        ]
+                    )
+                ),
+            )
+            if hasattr(result, 'status') and result.status == 'ok':
+                logger.info(f"Xóa thành công {total_chunks} chunks cho file: {file_source}")
+            else:
+                logger.warning(f"Xóa file {file_source} có thể không thành công, result: {result}")
+            return result
+        except Exception as e:
+            logger.error(f"Lỗi khi xóa file {file_source}: {e}")
+            raise e
 
     def get_all_chunks(
         self, file_source: str, limit: int = 100, offset: int = 0
@@ -128,7 +144,6 @@ class QdrantManager:
             raise ConnectionError("Qdrant client is not initialized")
 
         try:
-            # Cách 1: Xóa toàn bộ points trong collection (giữ lại collection structure)
             collection_info = self.client.get_collection(self.store.index)
             if collection_info.points_count and collection_info.points_count > 0:
                 # Xóa tất cả points bằng cách delete với filter trống

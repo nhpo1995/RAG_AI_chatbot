@@ -214,19 +214,23 @@ class MdParser:
                     continue
                 img_counter = next_idx
                 ctx = self._context(key, section_buffers)
-                docs.append(
-                    Document(
-                        content=ctx,
-                        meta={
-                            "category": "image",
-                            "source": source,
-                            "filename": filename,
-                            "document_id": document_id,
-                            "trace": f"Mục {key}",
-                            "filepath": str(img_path.resolve()),
-                        },
+                
+                # Only create image document if there is meaningful content
+                if ctx and ctx.strip():
+                    docs.append(
+                        Document(
+                            content=ctx,
+                            meta={
+                                "category": "image",
+                                "source": source,
+                                "filename": filename,
+                                "document_id": document_id,
+                                "trace": f"Mục {key}",
+                                "filepath": str(img_path.resolve()),
+                            },
+                        )
                     )
-                )
+                # If no context, skip this image to avoid empty content documents
                 continue
 
         if found_any_heading:

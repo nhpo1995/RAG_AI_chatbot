@@ -6,7 +6,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from processing._chunker import DocumentChunkerWrapper
 from processing._cleaner import DocumentCleanerWrapper
-from processing.embedder import get_document_embedder
+from processing.embedder import get_document_embedder, safe_embed_documents
 from parsers.router_parser import RouterParser
 from haystack import Document
 from typing import List, Dict
@@ -57,40 +57,35 @@ class DocToEmbed:
 
         for strategy_name, batch_size in strategies:
             try:
-                embedder = get_document_embedder(batch_size=batch_size)
                 logger.info(
                     f"Trying {strategy_name} strategy with batch_size={batch_size} for {len(documents)} documents"
                 )
-
-                if batch_size >= len(documents):
-                    # Process all at once
-                    return embedder.run(documents=documents)["documents"]
+                embedded_docs = safe_embed_documents(documents, batch_size)
+                if embedded_docs:
+                    logger.info(f"Strategy {strategy_name} succeeded with {len(embedded_docs)} documents")
+                    return embedded_docs
                 else:
-                    # Process in batches
-                    all_embedded = []
-                    for i in range(0, len(documents), batch_size):
-                        batch = documents[i : i + batch_size]
-                        embedded_batch = embedder.run(documents=batch)["documents"]
-                        all_embedded.extend(embedded_batch)
-                        logger.debug(
-                            f"Processed batch {i//batch_size + 1}: {len(embedded_batch)} documents"
-                        )
-                    return all_embedded
-
+                    logger.warning(f"Strategy {strategy_name} returned no documents")
+                    continue
             except Exception as e:
                 logger.warning(
                     f"Strategy {strategy_name} (batch_size={batch_size}) failed: {e}"
                 )
                 continue
-
         logger.error(f"All embedding strategies failed for {len(documents)} documents")
         return []
 
     def _clean_to_embed(self, list_doc: List[Document]) -> List[Document]:
         """Clean, chunk và embed documents với adaptive batching"""
-        cleaned_docs = self.cleaner.run(documents=list_doc)
+        # Pre-filter: Remove documents with empty content before processing
+        valid_docs = [doc for doc in list_doc if doc.content and str(doc.content).strip()]
+        if len(valid_docs) < len(list_doc):
+            logger.info(f"Filtered out {len(list_doc) - len(valid_docs)} documents with empty content")
+        if not valid_docs:
+            logger.warning("No valid documents to process after content filtering")
+            return []
+        cleaned_docs = self.cleaner.run(documents=valid_docs)
         chunked_docs = self.chunker.run(documents=cleaned_docs)
-
         if not chunked_docs:
             return []
         # Adaptive batching
@@ -142,7 +137,8 @@ class DocToEmbed:
         )
         return grouped_docs
 
-    def test_parser(self, folder_path: Path):
+    #This function is only for testing parser
+    def _test_parser(self, folder_path: Path):
         parsed_docs = self.parser.parse_folder(folder_path=folder_path)
         for idx, doc in enumerate(parsed_docs):
             print(f"{idx}. {doc.meta['filename']}")
@@ -151,4 +147,4 @@ class DocToEmbed:
 
 if __name__ == "__main__":
     pipe = DocToEmbed()
-    pipe.test_parser(cf.DATA_PATH)
+    pipe._test_parser(cf.DATA_PATH)

@@ -1,0 +1,38 @@
+# AI Document Assistant Dependencies
+# Generated from pyproject.toml
+
+# Core AI Framework
+haystack-ai>=2.16.1
+
+# Vector Database
+qdrant-haystack>=9.2.0
+qdrant-client>=1.15.1
+
+# Document Processing
+docling>=2.7.0
+
+# Language Models
+langchain>=0.3.27
+langchain-openai>=0.3.30
+
+# Web Interface
+gradio>=5.42.0
+
+# Utilities
+python-dotenv>=1.1.1
+colorlog>=6.9.0
+markdown>=3.8.2
+
+# Additional dependencies that may be needed
+# These are automatically installed as sub-dependencies
+# but listed here for reference:
+# - numpy
+# - pandas
+# - pillow
+# - opencv-python-headless
+# - pymupdf
+# - python-docx
+# - pypdf
+# - pytesseract
+# - beautifulsoup4
+# - lxml

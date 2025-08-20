@@ -121,17 +121,23 @@ def delete_all_files():
             if f.is_file():
                 # Deleting file
                 f.unlink()
-        new_files = list_files()  # Should be empty now
-        # Delete all completed
+        try:
+            db_service.clear_all_database()
+            logger.info("Đã xóa toàn bộ database thành công")
+        except Exception as db_error:
+            logger.error(f"Lỗi khi xóa database: {db_error}")
+            # Vẫn return success vì file đã xóa thành công
+        
+        new_files = list_files()
         return (
             gr.update(choices=new_files, value=[]),
-            f"✅ Đã xóa tất cả {file_count} file(s)",
-        )
+            f"✅ Đã xóa tất cả {file_count} file(s) trong database",)    
     except Exception as e:
         # Delete all error logged
+        logger.error(f"Lỗi khi xóa tất cả file: {e}")
         new_files = list_files()
         return gr.update(choices=new_files, value=[]), f"❌ Lỗi khi xóa: {str(e)}"
-
+ 
 
 def refresh_with_status():
     """Refresh file list và return status message"""
