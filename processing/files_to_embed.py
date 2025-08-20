@@ -1,12 +1,12 @@
 from pathlib import Path
 import sys
 
-# Add parent directory to path để có thể import config và modules khác
+# Thêm thư mục cha vào path để có thể import config và các modules khác
 sys.path.append(str(Path(__file__).parent.parent))
 
 from processing._chunker import DocumentChunkerWrapper
 from processing._cleaner import DocumentCleanerWrapper
-from processing.embedder import get_document_embedder, safe_embed_documents
+from processing.embedder import safe_embed_documents
 from parsers.router_parser import RouterParser
 from haystack import Document
 from typing import List, Dict
@@ -23,10 +23,10 @@ class DocToEmbed:
         self.parser = RouterParser(images_root=cf.IMAGES_PATH)
         self.cleaner = DocumentCleanerWrapper()
         self.chunker = DocumentChunkerWrapper()
-        # Note: embedder will be created dynamically with adaptive batch size
+        # Lưu ý: embedder sẽ được tạo động với kích thước batch thích ứng
 
     def _get_adaptive_batch_size(self, documents: List[Document]) -> int:
-        """Tự động chọn batch size dựa trên số lượng và kích thước documents"""
+        """Tự động chọn kích thước batch dựa trên số lượng và kích thước documents"""
         total_docs = len(documents)
         if total_docs == 0:
             return 1
@@ -34,20 +34,19 @@ class DocToEmbed:
         avg_content_length = (
             sum(len(doc.content or "") for doc in documents) / total_docs
         )
-        # Dynamic sizing rules - conservative approach
         if total_docs <= 5:
-            return total_docs  # Process all at once
-        elif avg_content_length < 500:  # Short content
+            return total_docs
+        elif avg_content_length < 500:
             return min(15, total_docs)
-        elif avg_content_length < 2000:  # Medium content
+        elif avg_content_length < 2000:
             return min(8, total_docs)
-        else:  # Long content
+        else:
             return min(5, total_docs)
 
     def _try_embed_with_fallback(
         self, documents: List[Document], initial_batch_size: int
     ) -> List[Document]:
-        """Try embedding with progressively smaller batches if failed"""
+        """Thử embedding với các batch nhỏ dần nếu thất bại"""
         strategies = [
             ("optimal", initial_batch_size),
             ("conservative", max(1, initial_batch_size // 2)),
@@ -58,44 +57,54 @@ class DocToEmbed:
         for strategy_name, batch_size in strategies:
             try:
                 logger.info(
-                    f"Trying {strategy_name} strategy with batch_size={batch_size} for {len(documents)} documents"
+                    f"Thử chiến lược {strategy_name} với batch_size={batch_size} cho {len(documents)} documents"
                 )
                 embedded_docs = safe_embed_documents(documents, batch_size)
                 if embedded_docs:
-                    logger.info(f"Strategy {strategy_name} succeeded with {len(embedded_docs)} documents")
+                    logger.info(
+                        f"Chiến lược {strategy_name} thành công với {len(embedded_docs)} documents"
+                    )
                     return embedded_docs
                 else:
-                    logger.warning(f"Strategy {strategy_name} returned no documents")
+                    logger.warning(
+                        f"Chiến lược {strategy_name} không trả về documents nào"
+                    )
                     continue
             except Exception as e:
                 logger.warning(
-                    f"Strategy {strategy_name} (batch_size={batch_size}) failed: {e}"
+                    f"Chiến lược {strategy_name} (batch_size={batch_size}) thất bại: {e}"
                 )
                 continue
-        logger.error(f"All embedding strategies failed for {len(documents)} documents")
+        logger.error(
+            f"Tất cả các chiến lược embedding đều thất bại cho {len(documents)} documents"
+        )
         return []
 
     def _clean_to_embed(self, list_doc: List[Document]) -> List[Document]:
-        """Clean, chunk và embed documents với adaptive batching"""
-        # Pre-filter: Remove documents with empty content before processing
-        valid_docs = [doc for doc in list_doc if doc.content and str(doc.content).strip()]
+        """Làm sạch, chia nhỏ và embed documents với batching thích ứng"""
+        # Lọc trước: Loại bỏ documents có nội dung trống trước khi xử lý
+        valid_docs = [
+            doc for doc in list_doc if doc.content and str(doc.content).strip()
+        ]
         if len(valid_docs) < len(list_doc):
-            logger.info(f"Filtered out {len(list_doc) - len(valid_docs)} documents with empty content")
+            logger.info(
+                f"Đã lọc ra {len(list_doc) - len(valid_docs)} documents có nội dung trống"
+            )
         if not valid_docs:
-            logger.warning("No valid documents to process after content filtering")
+            logger.warning("Không có documents hợp lệ để xử lý sau khi lọc nội dung")
             return []
         cleaned_docs = self.cleaner.run(documents=valid_docs)
         chunked_docs = self.chunker.run(documents=cleaned_docs)
         if not chunked_docs:
             return []
-        # Adaptive batching
+        # Batching thích ứng
         optimal_batch_size = self._get_adaptive_batch_size(chunked_docs)
         logger.info(
-            f"Processing {len(chunked_docs)} chunks with optimal batch size: {optimal_batch_size}"
+            f"Xử lý {len(chunked_docs)} chunks với kích thước batch tối ưu: {optimal_batch_size}"
         )
         embedded_docs = self._try_embed_with_fallback(chunked_docs, optimal_batch_size)
         logger.info(
-            f"Successfully embedded {len(embedded_docs)}/{len(chunked_docs)} documents"
+            f"Đã embed thành công {len(embedded_docs)}/{len(chunked_docs)} documents"
         )
         return embedded_docs
 
@@ -137,7 +146,7 @@ class DocToEmbed:
         )
         return grouped_docs
 
-    #This function is only for testing parser
+    # Hàm này chỉ để test parser
     def _test_parser(self, folder_path: Path):
         parsed_docs = self.parser.parse_folder(folder_path=folder_path)
         for idx, doc in enumerate(parsed_docs):

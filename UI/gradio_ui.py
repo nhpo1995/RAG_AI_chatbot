@@ -2,12 +2,22 @@ import gradio as gr
 import sys
 from pathlib import Path
 
-# Add parent directory to path để có thể import UI package
+# Thêm thư mục cha vào path để có thể import UI package
 sys.path.append(str(Path(__file__).parent.parent))
 
-from UI.gradio_func import *
+from UI.gradio_func import (
+    respond,
+    clear_chat,
+    reload_database,
+    run_with_status,
+    upload_file,
+    refresh_with_status,
+    delete_selected_files,
+    delete_all_files,
+    refresh_file_list,
+)
 
-# --- BUILD GRADIO UI --- #
+# --- XÂY DỰNG GRADIO UI --- #
 with gr.Blocks(title="AI Document Assistant") as demo:
 
     # Header
@@ -20,16 +30,16 @@ with gr.Blocks(title="AI Document Assistant") as demo:
     )
 
     with gr.Tabs():
-        # === CHAT TAB === #
+        # === TAB CHAT === #
         with gr.Tab("💬 Chat with AI"):
             with gr.Row():
                 with gr.Column(scale=4):
-                    # Chat interface
+                    # Giao diện chat
                     chatbox = gr.Chatbot(
                         label="AI Assistant", height=600, show_copy_button=True
                     )
 
-                    # Input area
+                    # Khu vực nhập liệu
                     with gr.Row():
                         with gr.Column(scale=10):
                             msg = gr.Textbox(
@@ -41,11 +51,11 @@ with gr.Blocks(title="AI Document Assistant") as demo:
                             )
                         with gr.Column(scale=1, min_width=100):
                             submit_btn = gr.Button("Send", variant="primary")
-                    # Control buttons
+                    # Các nút điều khiển
                     with gr.Row():
                         clear_btn = gr.Button("Clear Chat", variant="secondary")
 
-                # Side panel for database operations
+                # Panel bên cạnh cho các thao tác database
                 with gr.Column(scale=1, min_width=200):
                     gr.Markdown("### Database Operations")
                     reload_btn = gr.Button("Reload Database", variant="secondary")
@@ -59,7 +69,7 @@ with gr.Blocks(title="AI Document Assistant") as demo:
                     """
                     )
 
-        # === EVENT HANDLERS FOR CHAT=== #
+        # === CÁC EVENT HANDLER CHO CHAT === #
         msg.submit(
             fn=respond, inputs=[msg, chatbox], outputs=[chatbox, msg], api_name="chat"
         )
@@ -68,7 +78,7 @@ with gr.Blocks(title="AI Document Assistant") as demo:
 
         clear_btn.click(fn=clear_chat, outputs=[chatbox, msg])
 
-        # Database reload
+        # Reload database
         reload_btn.click(
             fn=lambda: run_with_status(
                 reload_database, "🔄 Đang reload DB...", "✅ Reload thành công!"
@@ -76,10 +86,10 @@ with gr.Blocks(title="AI Document Assistant") as demo:
             outputs=reload_status,
         )
 
-        # === FILE MANAGEMENT TAB === #
+        # === TAB QUẢN LÝ FILE === #
         with gr.Tab("📁 File Management"):
             with gr.Row():
-                # Upload section
+                # Phần upload
                 with gr.Column(scale=1):
                     gr.Markdown("### Upload Documents")
 
@@ -100,11 +110,11 @@ with gr.Blocks(title="AI Document Assistant") as demo:
                     - **Duplicates:** Auto-renamed
                     """
                     )
-                # File management section
+                # Phần quản lý file
                 with gr.Column(scale=1):
                     gr.Markdown("### Manage Files")
                     file_list = gr.CheckboxGroup(
-                        choices=[],  # Start empty, will be updated by refresh
+                        choices=[],  # Bắt đầu trống, sẽ được cập nhật bởi refresh
                         label="Uploaded Files (select to delete)",
                         info="Select files and click delete button",
                     )
@@ -116,25 +126,27 @@ with gr.Blocks(title="AI Document Assistant") as demo:
                     delete_all_btn = gr.Button("Delete All Files", variant="stop")
                     file_status = gr.Markdown(value="")
 
-    # === FILE MANAGEMENT EVENT HANDLERS === #
+    # === CÁC EVENT HANDLER CHO QUẢN LÝ FILE === #
 
     # Upload files
     upload_btn.click(
-        fn=upload_file, inputs=upload_input, outputs=[file_list, upload_status]
+        fn=upload_file,
+        inputs=upload_input,
+        outputs=[file_list, upload_input, upload_status],
     )
 
-    # Refresh file list with status feedback
+    # Refresh file list với phản hồi trạng thái
     refresh_btn.click(fn=refresh_with_status, outputs=[file_list, file_status])
 
-    # Delete selected files - FIX CHÍNH: Sử dụng function mới và output đúng
+    # Xóa file được chọn - FIX CHÍNH: Sử dụng function mới và output đúng
     delete_selected_btn.click(
         fn=delete_selected_files, inputs=file_list, outputs=[file_list, file_status]
     )
 
-    # Delete all files
+    # Xóa tất cả file
     delete_all_btn.click(fn=delete_all_files, outputs=[file_list, file_status])
 
-    # Auto-refresh file list when app loads
+    # Tự động refresh file list khi app khởi động
     demo.load(fn=refresh_file_list, outputs=file_list)
 
 demo.launch()

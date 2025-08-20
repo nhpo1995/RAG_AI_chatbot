@@ -25,7 +25,6 @@ class DocumentCleanerWrapper:
         cleaned_docs = []
         other_docs = []
         table_positions = {}
-
         for i, d in enumerate(documents):
             if d.meta.get("category") == "table":
                 table_positions[i] = d
@@ -41,5 +40,4 @@ class DocumentCleanerWrapper:
                     cleaned_docs.append(next(cleaned_iter))
                 except StopIteration:
                     pass
-
         return cleaned_docs

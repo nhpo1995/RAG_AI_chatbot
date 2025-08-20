@@ -19,15 +19,15 @@ class QdrantManager:
 
     def __init__(self, document_store: QdrantDocumentStore):
         self.store: QdrantDocumentStore = document_store or get_document_store()
-        # Initialize client directly if store._client is None
+        # Khởi tạo client trực tiếp nếu store._client là None
         if hasattr(self.store, "_client") and self.store._client is not None:
             self.client: QdrantClient = self.store._client
         else:
-            # Create client directly using store's configuration
+            # Tạo client trực tiếp sử dụng cấu hình của store
             from config import VECTOR_DB_URL
 
             self.client = QdrantClient(url=VECTOR_DB_URL)
-        # Test connection
+        # Test kết nối
         try:
             self.client.get_collections()
         except Exception as e:
@@ -79,7 +79,7 @@ class QdrantManager:
         chunks = self.get_all_chunks(file_source, limit=1)
         if not chunks:
             logger.warning(f"Không tìm thấy chunks nào cho file: {file_source}")
-            return None  
+            return None
         total_chunks = len(self.get_all_chunks(file_source))
         logger.info(f"Bắt đầu xóa {total_chunks} chunks cho file: {file_source}")
         try:
@@ -95,10 +95,14 @@ class QdrantManager:
                     )
                 ),
             )
-            if hasattr(result, 'status') and result.status == 'ok':
-                logger.info(f"Xóa thành công {total_chunks} chunks cho file: {file_source}")
+            if hasattr(result, "status") and result.status == "ok":
+                logger.info(
+                    f"Xóa thành công {total_chunks} chunks cho file: {file_source}"
+                )
             else:
-                logger.warning(f"Xóa file {file_source} có thể không thành công, result: {result}")
+                logger.warning(
+                    f"Xóa file {file_source} có thể không thành công, result: {result}"
+                )
             return result
         except Exception as e:
             logger.error(f"Lỗi khi xóa file {file_source}: {e}")
@@ -150,7 +154,7 @@ class QdrantManager:
                 result = self.client.delete(
                     collection_name=self.store.index,
                     points_selector=models.FilterSelector(
-                        filter=models.Filter()  # Empty filter = all points
+                        filter=models.Filter()  # Filter trống = tất cả points
                     ),
                 )
                 if hasattr(result, "status") and result.status == "ok":
@@ -161,21 +165,17 @@ class QdrantManager:
                     raise Exception("Delete operation failed")
             else:
                 logger.info(f"Collection {self.store.index} đã trống")
-
         except Exception as e:
             logger.warning(f"Không thể xóa points, thử xóa và tạo lại collection: {e}")
             # Fallback: xóa collection và tạo lại
             try:
                 self.client.delete_collection(self.store.index)
                 logger.info(f"Đã xóa collection: {self.store.index}")
-
-                # Tạo lại collection với cùng config
                 from storage.vector_store import get_document_store
 
                 new_store = get_document_store(recreate_index=True)
                 self.store = new_store
                 logger.info(f"Đã tạo lại collection: {self.store.index}")
-
             except Exception as e2:
                 logger.error(f"Lỗi khi tạo lại collection: {e2}")
                 raise e2

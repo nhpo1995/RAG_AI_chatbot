@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import List
 import sys
 
-# Add parent directory to path để có thể import parsers package
+# Thêm thư mục cha vào path để có thể import parsers package
 sys.path.append(str(Path(__file__).parent.parent))
 
 from haystack import Document
@@ -67,7 +67,7 @@ if __name__ == "__main__":
     import sys
     from pathlib import Path
 
-    # Add parent directory to path để có thể import config
+    # Thêm thư mục cha vào path để có thể import config
     sys.path.append(str(Path(__file__).parent.parent))
     import config as cf
 

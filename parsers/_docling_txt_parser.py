@@ -32,7 +32,7 @@ class TxtParser:
             "latin-1",
         ]
 
-    # --- helpers (đưa vào class) ---
+    # --- các hàm helper (đưa vào class) ---
     _PARA_SPLIT = re.compile(r"\n\s*\n+", flags=re.MULTILINE)
     _SENT_SPLIT = re.compile(
         r"(?<=[\.!?])\s+(?=[A-ZÀ-Ỵ])|(?<=[\.!\?])\s+(?=\d+)|\n{2,}"

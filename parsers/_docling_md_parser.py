@@ -38,7 +38,7 @@ class MdParser:
         self.fallback_n_paragraphs = int(fallback_n_paragraphs)
         self.converter = DocumentConverter()
 
-    # --- helpers trong class ---
+    # --- các hàm helper trong class ---
     _SENT_SPLIT = re.compile(
         r"(?<=[\.!?])\s+(?=[A-ZÀ-Ỵ])|(?<=[\.!\?])\s+(?=\d+)|\n{2,}"
     )
@@ -214,8 +214,8 @@ class MdParser:
                     continue
                 img_counter = next_idx
                 ctx = self._context(key, section_buffers)
-                
-                # Only create image document if there is meaningful content
+
+                # Chỉ tạo document ảnh nếu có nội dung có ý nghĩa
                 if ctx and ctx.strip():
                     docs.append(
                         Document(
@@ -230,7 +230,6 @@ class MdParser:
                             },
                         )
                     )
-                # If no context, skip this image to avoid empty content documents
                 continue
 
         if found_any_heading:

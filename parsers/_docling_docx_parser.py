@@ -39,7 +39,7 @@ class DocxParser:
         self.converter = DocumentConverter()  # DOCX không cần PdfPipelineOptions
 
     # -------------------------
-    # Helpers (đưa vào class theo yêu cầu)
+    # Các hàm helper (đưa vào class theo yêu cầu)
     # -------------------------
     _SENT_SPLIT = re.compile(
         r"(?<=[\.!?])\s+(?=[A-ZÀ-Ỵ])|(?<=[\.!\?])\s+(?=\d+)|\n{2,}"
@@ -68,7 +68,7 @@ class DocxParser:
         seed = f"{path.resolve()}:{st.st_size}:{st.st_mtime_ns}"
         return str(uuid.uuid5(uuid.NAMESPACE_URL, seed))
 
-    # ---- heading helpers ----
+    # ---- các hàm helper cho heading ----
     @staticmethod
     def _heading_level(el: SectionHeaderItem) -> int:
         for attr in ("level", "depth", "rank"):
@@ -87,7 +87,7 @@ class DocxParser:
     def _heading_path(stack: List[Tuple[int, str]]) -> str:
         return " > ".join(h[1] for h in stack) if stack else "ROOT"
 
-    # ---- context & text accumulation ----
+    # ---- context & tích lũy text ----
     def _context(self, key: str, buffers: Dict[str, List[str]]) -> str:
         buf = buffers.get(key, [])
         return " ".join(buf[-self.context_sentences :]).strip()
@@ -232,8 +232,8 @@ class DocxParser:
                     continue
                 img_counter = next_idx
                 ctx = self._context(key, section_buffers)
-                
-                # Only create image document if there is meaningful content
+
+                # Chỉ tạo document ảnh nếu có nội dung có ý nghĩa
                 if ctx and ctx.strip():
                     docs.append(
                         Document(
@@ -250,7 +250,7 @@ class DocxParser:
                     )
                 continue
 
-        # Emit remaining text
+        # Xuất text còn lại
         if found_any_heading:
             for key in list(section_texts.keys()):
                 full_text = "\n\n".join(section_texts[key]).strip()

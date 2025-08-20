@@ -21,6 +21,8 @@ class DocumentChunkerWrapper:
         """
         Chunk bảng theo header + nhóm row (ví dụ: 15 hàng một chunk)
         """
+        if doc.content is None:
+            return [doc]
         lines = doc.content.strip().split("\n")
         if not lines:
             return [doc]
@@ -54,5 +56,4 @@ class DocumentChunkerWrapper:
         if text_docs_to_split:
             result = self.chunker.run(documents=text_docs_to_split)
             final_chunks.extend(result["documents"])
-
         return final_chunks

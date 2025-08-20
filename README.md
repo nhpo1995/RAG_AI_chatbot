@@ -5,7 +5,7 @@
 ## ✨ Tính năng chính
 
 -   📚 **Hỗ trợ đa định dạng**: PDF, DOCX, TXT, MD
--   🖼️ **Xử lý hình ảnh thông minh**: Tự động trích xuất và phân tích hình ảnh với Docling
+-   🖼️ **Xử lý hình ảnh thông minh**: Tính năng hiện vẫn đang phát triển, ocr đã được tắt trên pdf.
 -   💬 **Chat AI thông minh**: Trả lời câu hỏi dựa trên nội dung tài liệu
 -   🔍 **Tìm kiếm vector**: Sử dụng Qdrant để lưu trữ và tìm kiếm embeddings
 -   🎯 **Giao diện thân thiện**: Web UI với Gradio
@@ -98,7 +98,7 @@ docker-compose up -d qdrant
 **🔍 Kiểm tra Database**: Sau khi khởi động Qdrant, bạn có thể truy cập dashboard tại:
 `http://localhost:6333/dashboard#/collections/Document#points`
 
-#### Kiểm tra services
+#### Kiểm tra services (Optional)
 
 ```bash
 # Kiểm tra Qdrant
@@ -154,8 +154,9 @@ Chỉnh sửa `config.py` để thay đổi:
 ## 📖 Hướng dẫn sử dụng
 
 1. **Upload tài liệu**: Tab "📁 File Management" → Chọn file → Upload
-2. **Chat với AI**: Tab "💬 Chat with AI" → Nhập câu hỏi
+2. **Chat với AI**: Tab "💬 Chat with AI" → Nhập câu hỏi  
 3. **Quản lý DB**: Reload Database, xóa file, kiểm tra trạng thái
+4. **Sử dụng dữ liệu test**: Đã có sẵn một số tài liệu test trong folder data. Nếu muốn chạy ngay có thể bấm Reload Database. Khi có thông báo "Reload thành công" thì có thể bắt đầu chat.
 
 ## 🐛 Xử lý lỗi thường gặp
 

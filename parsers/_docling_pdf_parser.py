@@ -11,8 +11,13 @@ from haystack import Document
 # Docling
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.base_models import InputFormat
-from docling.datamodel.pipeline_options import PdfPipelineOptions
-from docling_core.types.doc import TextItem, SectionHeaderItem, TableItem, PictureItem
+from docling.datamodel.pipeline_options import PdfPipelineOptions, TesseractOcrOptions
+from docling_core.types.doc.document import (
+    TextItem,
+    SectionHeaderItem,
+    TableItem,
+    PictureItem,
+)
 
 
 class PdfParser:
@@ -40,7 +45,7 @@ class PdfParser:
         self.image_scale = float(image_scale)
         self.converter = self._make_converter()
 
-    # Helpers (giảm trùng lặp)
+    # Các hàm helper (giảm trùng lặp)
     _SENT_SPLIT = re.compile(
         r"(?<=[\.!?])\s+(?=[A-ZÀ-Ỵ])|(?<=[\.!\?])\s+(?=\d+)|\n{2,}"
     )
@@ -63,12 +68,8 @@ class PdfParser:
         return t.strip()
 
     def _make_converter(self) -> DocumentConverter:
-        pdf_opts = PdfPipelineOptions()
-        pdf_opts.images_scale = self.image_scale
-        pdf_opts.generate_picture_images = True  # PictureItem.get_image(...)
-        return DocumentConverter(
-            format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pdf_opts)}
-        )
+        # Sử dụng DocumentConverter với PDF format nhưng không cần pipeline options
+        return DocumentConverter(format_options={InputFormat.PDF: PdfFormatOption()})
 
     @staticmethod
     def _file_document_id(path: Path) -> str:
@@ -212,7 +213,7 @@ class PdfParser:
                 if not filepath:
                     continue
                 ctx = self._context(page_no, page_buffers)
-                # Only create image document if there is meaningful content
+                # Chỉ tạo document ảnh nếu có nội dung có ý nghĩa
                 if ctx and ctx.strip():
                     docs.append(
                         Document(
